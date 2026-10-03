@@ -1,47 +1,5 @@
-const CACHE='kniha-jizd-v2';
-const ASSETS=['./','./index.html','./manifest.webmanifest','./icon.svg'];
-
-self.addEventListener('install',event=>{
-  self.skipWaiting();
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
-});
-
-self.addEventListener('activate',event=>{
-  event.waitUntil(
-    caches.keys()
-      .then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))
-      .then(()=>self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch',event=>{
-  if(event.request.method!=='GET') return;
-
-  const requestUrl = new URL(event.request.url);
-  const isAppShell = requestUrl.origin===self.location.origin &&
-    (requestUrl.pathname.endsWith('/') || requestUrl.pathname.endsWith('/index.html'));
-
-  if(isAppShell){
-    event.respondWith(
-      fetch(event.request)
-        .then(response=>{
-          const copy=response.clone();
-          caches.open(CACHE).then(cache=>cache.put(event.request,copy));
-          return response;
-        })
-        .catch(()=>caches.match(event.request).then(r=>r||caches.match('./index.html')))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then(cached=>{
-      if(cached) return cached;
-      return fetch(event.request).then(response=>{
-        const copy=response.clone();
-        caches.open(CACHE).then(cache=>cache.put(event.request,copy));
-        return response;
-      });
-    })
-  );
-});
+const CACHE='kniha-jizd-github-v3';
+const ASSETS=['./index.html','./odometer-photo.js','./vendor/tesseract-6.0.1.min.js','./vendor/tesseract-worker-6.0.1.min.js','./manifest.webmanifest','./icon-graphite-180.png','./icon-graphite-192.png','./icon-graphite-512.png','./favicon-graphite.png'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('kniha-jizd-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+self.addEventListener('fetch',e=>{if(new URL(e.request.url).pathname.startsWith('/api/'))return;if(e.request.method!=='GET'||new URL(e.request.url).origin!==self.location.origin)return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request).then(r=>r||(e.request.mode==='navigate'?caches.match('./index.html'):Response.error()))));});
