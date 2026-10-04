@@ -52,6 +52,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .delete-ride{margin-top:12px;border-top:1px solid var(--line);padding-top:6px}.delete-ride summary{color:var(--danger);font-size:13px}.delete-ride p{margin:6px 0 12px}.delete-ride button{min-height:44px;font-size:14px;padding:10px}
 </style>
 <script src="route-map.js"></script>
+<script src="ride-places.js"></script>
 </head>
 <body>
 <div class="app">
@@ -148,7 +149,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
       <button id="clearPhotos" class="secondary" type="button" style="margin-top:10px">Zrušit výpočet z fotek</button>
       <p class="small">Fotky se zpracují v telefonu a neukládají se do historie. Při prvním čtení je potřeba internet pro načtení rozpoznávání.</p>
     </details>
-    <div class="field"><label for="tripDate" class="label">Datum a čas začátku</label><input id="tripDate" type="datetime-local"></div><div class="grid"><div class="field"><label for="tripFrom" class="label">Odkud</label><input id="tripFrom" placeholder="Např. Praha"></div><div class="field"><label for="tripTo" class="label">Kam</label><input id="tripTo" placeholder="Např. Brno"></div></div><div class="field"><label for="correctedKm" class="label">Skutečně ujeto (km)</label><input id="correctedKm" type="number" min="0" step="0.001" inputmode="decimal"><div class="small">Vzdálenost z GPS je předvyplněná. Pokud potřebuješ, uprav ji podle tachometru auta. 0,001 km = 1 metr.</div></div><div class="field">
+    <div class="field"><label for="tripDate" class="label">Datum a čas začátku</label><input id="tripDate" type="datetime-local"></div><div id="placeLookupInfo" class="status hidden"><span id="placeLookupStatus" role="status" aria-live="polite"></span><div style="margin-top:6px"><a href="https://mapy.com/" target="_blank" rel="noopener"><img src="mapy-logo.svg" alt="Mapy.com" height="20" style="vertical-align:middle;width:auto"></a></div></div><div class="grid"><div class="field"><label for="tripFrom" class="label">Odkud</label><input id="tripFrom" placeholder="Např. Praha"></div><div class="field"><label for="tripTo" class="label">Kam</label><input id="tripTo" placeholder="Např. Brno"></div></div><div class="field"><label for="correctedKm" class="label">Skutečně ujeto (km)</label><input id="correctedKm" type="number" min="0" step="0.001" inputmode="decimal"><div class="small">Vzdálenost z GPS je předvyplněná. Pokud potřebuješ, uprav ji podle tachometru auta. 0,001 km = 1 metr.</div></div><div class="field">
       <label for="tripType" class="label">Typ jízdy</label>
       <select id="tripType">
         <option value="Soukromá">Soukromá</option>
@@ -254,6 +255,7 @@ async function initializeLog(){
       if(!migrated) throw new Error('Přenos původních záznamů se nezdařil.');
     }else $('storageStatus').textContent='Kniha jízd načtena.';
     renderOdometer();renderTrips();restoreActiveTrip();
+    fillExistingPlaces();
     savingControls(false);
   }catch(err){
     storageReady=false;savingControls(true);
@@ -433,8 +435,12 @@ $('stopTrip').addEventListener('click',()=>{
   $('finishPanel').classList.remove('hidden');
 });
 
+let saveTripBusy=false;
 $('saveTrip').addEventListener('click',async()=>{
-  if(!state.draft) return;
+  if(!state.draft || saveTripBusy) return;
+  const currentDraft=state.draft;saveTripBusy=true;
+  try{await waitDraftPlaces(currentDraft);}finally{saveTripBusy=false;}
+  if(state.draft!==currentDraft)return;
   if(state.draft.photoDirty){$('photoDifference').textContent='Zkontroluj stavy a stiskni Použít rozdíl, nebo zruš výpočet z fotek.';return;}
   const km=Number($('correctedKm').value);
   const start=new Date($('tripDate').value).getTime();
@@ -507,6 +513,7 @@ function renderTrips(){
       <div class="trip-meta">${t.from || t.to ? escapeHtml(t.from||"—")+" → "+escapeHtml(t.to||"—")+" · " : ""}${t.manual ? "Ruční záznam" : dur} · ${formatOdometer(t.odometerStart)} → ${formatOdometer(t.odometerEnd)} km</div>
       <div class="pill">${escapeHtml(t.type)}</div>
       ${t.note ? `<div class="trip-meta">${escapeHtml(t.note)}</div>` : ''}
+      ${t.placesSource==='Mapy.com'?'<div class="trip-meta"><a href="https://mapy.com/" target="_blank" rel="noopener"><img src="mapy-logo.svg" alt="Místa podle Mapy.com" height="14" style="width:auto;vertical-align:middle"></a></div>':''}
       ${rideMapMarkup(t,index)}
       <details class="delete-ride"><summary>Smazat jízdu</summary><p class="small">Opravdu smazat tuto jízdu? Její vzdálenost se odečte i z tachometru.</p><div class="row"><button class="secondary" type="button" data-cancel-delete="${index}">Zrušit</button><button class="danger" type="button" data-confirm-delete="${index}">Smazat jízdu</button></div></details>
     </div>`;
@@ -563,6 +570,7 @@ function prepareFinish(){
   $('tripDate').value=d.toISOString().slice(0,16);
   $('correctedKm').value=state.draft.distanceKm.toFixed(3);
   $('tripFrom').value=''; $('tripTo').value='';
+  populateDraftPlaces(state.draft);
 }
 $('manualTrip').addEventListener('click',()=>{
   state.draft={manual:true,startedAt:Date.now(),endedAt:Date.now(),distanceKm:0,odometerStart:loadOdometer(),odometerEnd:loadOdometer()};

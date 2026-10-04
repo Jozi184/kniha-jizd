@@ -1,5 +1,5 @@
-const CACHE='kniha-jizd-v15';
-const ASSETS=['./index.html','./route-map.js','./mapy-logo.svg','./vendor/leaflet.js','./vendor/leaflet.css','./odometer-photo.js','./vendor/tesseract-6.0.1.min.js','./vendor/tesseract-worker-6.0.1.min.js','./manifest.webmanifest','./icon-graphite-180.png','./icon-graphite-192.png','./icon-graphite-512.png','./favicon-graphite.png'];
+const CACHE='kniha-jizd-v16';
+const ASSETS=['./index.html','./route-map.js','./ride-places.js','./mapy-logo.svg','./vendor/leaflet.js','./vendor/leaflet.css','./odometer-photo.js','./vendor/tesseract-6.0.1.min.js','./vendor/tesseract-worker-6.0.1.min.js','./manifest.webmanifest','./icon-graphite-180.png','./icon-graphite-192.png','./icon-graphite-512.png','./favicon-graphite.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('kniha-jizd-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{if(new URL(e.request.url).pathname.startsWith('/api/'))return;if(e.request.method!=='GET'||new URL(e.request.url).origin!==self.location.origin)return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request).then(r=>r||(e.request.mode==='navigate'?caches.match('./index.html'):Response.error()))));});
