@@ -503,7 +503,7 @@ function renderTrips(){
       <div class="pill">${escapeHtml(t.type)}</div>
       ${t.note ? `<div class="trip-meta">${escapeHtml(t.note)}</div>` : ''}
       ${rideMapMarkup(t,index)}
-      <details class="delete-ride"><summary>Smazat jízdu</summary><p class="small">Opravdu smazat tuto jízdu? Stav tachometru zůstane stejný.</p><div class="row"><button class="secondary" type="button" data-cancel-delete="${index}">Zrušit</button><button class="danger" type="button" data-confirm-delete="${index}">Smazat jízdu</button></div></details>
+      <details class="delete-ride"><summary>Smazat jízdu</summary><p class="small">Opravdu smazat tuto jízdu? Její vzdálenost se odečte i z tachometru.</p><div class="row"><button class="secondary" type="button" data-cancel-delete="${index}">Zrušit</button><button class="danger" type="button" data-confirm-delete="${index}">Smazat jízdu</button></div></details>
     </div>`;
   }).join('');
   bindRideMaps($('tripList'),trips);
@@ -513,7 +513,7 @@ function renderTrips(){
     if(storageBusy || !storageReady || getTrips()!==trips)return;
     if(state.startedAt || state.draft){$('storageStatus').textContent='Nejdřív ulož nebo zahoď rozepsanou jízdu, potom můžeš mazat historii.';return;}
     const target=trips[index];if(!target)return;
-    if(await persistLog(loadOdometer(),trips.filter((_,i)=>i!==index)))$('storageStatus').textContent='Jízda smazána. Stav tachometru zůstává stejný.';
+    if(await persistLog(Math.max(0,Math.round((loadOdometer()-Number(target.distanceKm))*1000000)/1000000),trips.filter((_,i)=>i!==index)))$('storageStatus').textContent='Jízda smazána a její vzdálenost odečtena z tachometru.';
   }));
 }
 function escapeHtml(s){
