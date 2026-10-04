@@ -1,6 +1,7 @@
 import SwiftUI
 
 @main struct KnihaJizdApp: App {
+    init() { RideShortcuts.updateAppShortcutParameters() }
     @StateObject private var recorder = Recorder.shared
     var body: some Scene {
         WindowGroup {

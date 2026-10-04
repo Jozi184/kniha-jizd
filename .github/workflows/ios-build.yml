@@ -23,8 +23,22 @@ jobs:
       - name: Build app and widgets without signing
         run: |
           xcodebuild -version
-          xcodebuild -project ios/KnihaJizd.xcodeproj -scheme KnihaJizd -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/ios-build.log" 2>&1 || { cat "$RUNNER_TEMP/ios-build.log"; exit 1; }
+          xcodebuild -project ios/KnihaJizd.xcodeproj -scheme KnihaJizd -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/kniha-build" CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/ios-build.log" 2>&1 || { cat "$RUNNER_TEMP/ios-build.log"; exit 1; }
           tail -30 "$RUNNER_TEMP/ios-build.log"
+          python3 - <<'PYTHON'
+          import os
+          from pathlib import Path
+          log = (Path(os.environ['RUNNER_TEMP']) / 'ios-build.log').read_text()
+          diagnostics = [line for line in log.splitlines() if 'warning:' in line or 'error:' in line]
+          assert not diagnostics, '\n'.join(diagnostics)
+          products = Path(os.environ['RUNNER_TEMP']) / 'kniha-build/Build/Products/Debug-iphonesimulator'
+          for bundle in ['KnihaJizd.app', 'RideWidgets.appex']:
+              metadata = products / bundle / 'Metadata.appintents'
+              payload = b''.join(p.read_bytes() for p in metadata.rglob('*') if p.is_file())
+              for name in [b'StartRideIntent', b'StopRideIntent']:
+                  assert name in payload, (bundle, name, 'Missing intent metadata')
+              print(bundle, 'contains both ride actions')
+          PYTHON
       - name: Build log
         if: always()
         uses: actions/upload-artifact@v4

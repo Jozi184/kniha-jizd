@@ -13,12 +13,8 @@ struct StartRideIntent: LiveActivityIntent {
     static var supportedModes: IntentModes { .background }
 
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
-        #if WIDGET_EXTENSION
-        throw IntentError.appRequired
-        #else
-        let started = try Recorder.shared.startFromSystem()
+        let started = try RideIntentExecutor.start()
         if !started { return .result(dialog: "Jízda už probíhá.") }
-        #endif
         return .result(dialog: "GPS jízda je spuštěná.")
     }
 }
@@ -33,12 +29,25 @@ struct StopRideIntent: LiveActivityIntent {
     static var supportedModes: IntentModes { .background }
 
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
+        try RideIntentExecutor.stop()
+        return .result(dialog: "Měření je ukončené. Jízdy zkontroluješ v aplikaci.")
+    }
+}
+
+private enum RideIntentExecutor {
+    @MainActor static func start() throws -> Bool {
+        #if WIDGET_EXTENSION
+        throw IntentError.appRequired
+        #else
+        return try Recorder.shared.startFromSystem()
+        #endif
+    }
+    @MainActor static func stop() throws {
         #if WIDGET_EXTENSION
         throw IntentError.appRequired
         #else
         guard Recorder.shared.stop() else { throw IntentError.saveFailed }
         #endif
-        return .result(dialog: "Měření je ukončené. Jízdy zkontroluješ v aplikaci.")
     }
 }
 
@@ -54,10 +63,11 @@ private enum IntentError: Error, CustomLocalizedStringResourceConvertible {
 
 #if !WIDGET_EXTENSION
 @available(iOS 17.0, *)
+// Siri training uses an English base locale; the visible action titles stay Czech.
 struct RideShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: StartRideIntent(), phrases: ["Zahájit jízdu v \(.applicationName)"], shortTitle: "Zahájit jízdu", systemImageName: "car.fill")
-        AppShortcut(intent: StopRideIntent(), phrases: ["Ukončit jízdu v \(.applicationName)"], shortTitle: "Ukončit jízdu", systemImageName: "stop.fill")
+        AppShortcut(intent: StartRideIntent(), phrases: ["Start a ride in \(.applicationName)"], shortTitle: "Zahájit jízdu", systemImageName: "car.fill")
+        AppShortcut(intent: StopRideIntent(), phrases: ["Stop a ride in \(.applicationName)"], shortTitle: "Ukončit jízdu", systemImageName: "stop.fill")
     }
 }
 #endif

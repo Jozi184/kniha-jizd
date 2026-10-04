@@ -206,7 +206,7 @@ enum RideActionError: LocalizedError {
         var queued = pendingRides; queued.append(completed)
         do {
             try write(RideArchive(active: nil, pending: queued, account: account))
-            pendingRides = queued; ride = nil
+            pendingRides = queued; ride = nil; storageFailed = false
             live.finish(completed)
             message = "Jízda čeká na kontrolu. Můžeš spustit další."
             return true
