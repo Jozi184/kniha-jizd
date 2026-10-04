@@ -9,7 +9,7 @@ Nativní Core Location záznam GPS pod posledním původním PWA rozhraním. Ste
 3. Target KnihaJizd → Signing & Capabilities → Team → svůj Personal Team. Případně uprav Bundle Identifier na jedinečný.
 4. Připoj a odemkni iPhone, potvrď důvěru počítači, zapni Developer Mode podle výzvy Xcode.
 5. Vyber iPhone jako cílové zařízení a spusť Run. Na iPhonu případně důvěřuj svému vývojářskému účtu v Nastavení → Obecné → VPN a správa zařízení.
-6. Aplikace otevře současné PWA rozhraní. Přihlas se svým ChatGPT účtem, pokud bude požadováno.
+6. Aplikace otevře současné PWA rozhraní. Vytvoř účet e-mailem a heslem a potvrď e-mail. Stejný účet použij na PC na https://jozi184.github.io/kniha-jizd/. Přihlášení přes ChatGPT není potřeba.
 7. Zahaj jízdu původním tlačítkem Zahájit GPS záznam; povol polohu a Přesnou polohu. Po ukončení zkontroluj kilometry a ulož, nebo potvrď zahození.
 
 ## Aktualizace již naklonované verze
@@ -18,12 +18,12 @@ V Xcode použij Integrate → Pull (ve starších verzích Source Control → Pu
 
 ## Rozhraní a záznam
 
-- Celé rozhraní se načítá z existující privátní webové aplikace; změny designu a běžných webových funkcí se projeví bez nové instalace.
+- Celé rozhraní se načítá z webové aplikace s vlastními účty a databází Supabase; změny designu a běžných webových funkcí se projeví bez nové instalace.
 - Bundlovaný NativeBridge.js propojuje původní tlačítka s Core Location. Start/stop nepoužívá browserovou GPS.
 - Core Location ukládá celou rozpracovanou trasu atomicky do zařízení po každé použitelné poloze. Při návratu ze zamčené obrazovky předává úplný stav, nespoléhá na běh JavaScriptu na pozadí.
 - Záznam čeká po ukončení na uložení nebo zahození ve stejném formuláři jako PWA. Lokální kopie se odstraní až po potvrzeném serverovém uložení nebo explicitním zahození. NativeRideId brání opakovanému vložení při obnovení stránky.
 - Ruční zadání včetně fotografií, tachometr s desetinnou čárkou, historie, mazání, mapy a automatické názvy míst používají původní webový kód. CSV export otevírá systémovou nabídku sdílení iOS.
-- Ikona AppIcon je převzata z PWA icon-graphite-512.png, převedena na požadovaných 1024 × 1024 bez průhlednosti. Ikona je přiřazena v obou konfiguracích sestavení.
+- Ikona AppIcon používá plné limetkové auto z prvního nativního návrhu na grafitovém pozadí, ve velikosti 1024 × 1024 bez průhlednosti. Zdroj je Design/AppIcon.svg. Ikona je přiřazena v obou konfiguracích sestavení.
 
 ## GPS a omezení
 
@@ -35,4 +35,4 @@ Bezplatný Personal Team vyžaduje pravidelné obnovení instalace přes Xcode. 
 
 JavaScriptový most má testy pro start/stop, předání úplné trasy, zachování oprav, neúspěšné a úspěšné uložení, potvrzené zahození, zabránění duplicitám, CSV a kontrolu původu stránky. Plist a odkazy/resources v Xcode projektu jsou kontrolované. Aktualizovanou Swift část nelze v Linuxovém prostředí zkompilovat; sestavení a test na telefonu je potřeba dokončit v Xcode.
 
-Přihlášení přes ChatGPT ve WKWebView zůstává k ověření na telefonu. Safari a nativní aplikace mají oddělené cookies a poskytovatel může vložený prohlížeč odmítnout. Nepoužíváme servisní token jako náhradu identity. Pro načtení historie je potřeba síť a přihlášení; během již zahájené jízdy ukládá nativní GPS lokálně i bez sítě. Úpravy interních funkcí formuláře vyžadují kontrolu mostu a případně aktualizaci aplikace.
+Přihlášení e-mailem a heslem ukládá relaci do WKWebView. Safari a nativní aplikace mají vlastní relace; přihlas se v nich stejným účtem. Databáze chrání jízdy podle uživatele pomocí RLS. Souběžné změny mají kontrolu revize, aby druhé zařízení nepřepsalo novější historii. Pro načtení historie a uložení je potřeba síť; během již zahájené jízdy ukládá nativní GPS lokálně i bez sítě. Při neúspěšném uložení zůstává jízda v zařízení.

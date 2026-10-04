@@ -4,7 +4,7 @@ import UIKit
 
 struct LogWebView: UIViewRepresentable {
     @ObservedObject var recorder: Recorder
-    static let site = URL(string: "https://kniha-jizd-joe.josef-dolezal838830.chatgpt.site/index.html")!
+    static let site = URL(string: "https://jozi184.github.io/kniha-jizd/index.html")!
     func makeCoordinator() -> Coordinator { Coordinator(recorder) }
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -37,10 +37,11 @@ struct LogWebView: UIViewRepresentable {
             guard message.frameInfo.isMainFrame,
                   message.frameInfo.securityOrigin.protocol == "https",
                   message.frameInfo.securityOrigin.host == LogWebView.site.host,
+                  message.frameInfo.request.url?.path.hasPrefix("/kniha-jizd/") == true,
                   let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
             switch action {
             case "start":
-                if let value = body["odometerStart"] as? Double, value.isFinite, value >= 0 { recorder.start(odometer: value) }
+                if let value = body["odometerStart"] as? Double, value.isFinite, value >= 0 { recorder.start(odometer: value, userId: body["userId"] as? String) }
             case "stop": recorder.stop()
             case "retry": recorder.retry()
             case "test": recorder.testGps()
@@ -53,7 +54,7 @@ struct LogWebView: UIViewRepresentable {
             publish()
         }
         func publish() {
-            guard let web, web.url?.scheme == "https", web.url?.host == LogWebView.site.host else { return }
+            guard let web, web.url?.scheme == "https", web.url?.host == LogWebView.site.host, web.url?.path.hasPrefix("/kniha-jizd/") == true else { return }
             struct Snapshot: Encodable { var ride: Ride?; var message: String; var speedKmh: Double }
             guard let data = try? JSONEncoder().encode(Snapshot(ride: recorder.ride, message: recorder.message, speedKmh: recorder.speedKmh)),
                   let json = String(data: data, encoding: .utf8) else { return }

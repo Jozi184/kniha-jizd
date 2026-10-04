@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  const trustedOrigin = 'https://kniha-jizd-joe.josef-dolezal838830.chatgpt.site';
-  if (location.origin !== trustedOrigin || window.top !== window || !window.webkit?.messageHandlers?.nativeRide) return;
+  const trustedOrigin = 'https://jozi184.github.io';
+  if (location.origin !== trustedOrigin || (location.pathname && !location.pathname.startsWith("/kniha-jizd/")) || window.top !== window || !window.webkit?.messageHandlers?.nativeRide) return;
   if (window.__nativeBridgeInstalled) return;
   window.__nativeBridgeInstalled = true;
   const send = body => window.webkit.messageHandlers.nativeRide.postMessage(body);
@@ -10,7 +10,7 @@
   const ready = () => typeof storageReady !== 'undefined' && storageReady && !storageBusy;
   const timer = () => { clearInterval(state.timerId); state.timerId = setInterval(renderLive, 1000); };
   function apply() {
-    if (!ready() || !latest) return;
+    if (!ready() || !latest || !window.rideAccount?.user) return;
     const {ride, message, speedKmh} = latest;
     pending = false;
     if (!ride) {
@@ -18,6 +18,10 @@
         $('idleStatus').textContent = message;
         if (!$('gpsTestResult').classList.contains('hidden')) $('gpsTestResult').textContent = message;
       }
+      return;
+    }
+    if (ride.userId && ride.userId !== window.rideAccount.user.id) {
+      $('idleStatus').textContent='V telefonu je neuložená jízda jiného účtu. Přihlas se k původnímu účtu.';
       return;
     }
     if (log.trips.some(t => t.nativeRideId === ride.id)) {
@@ -70,7 +74,7 @@
     intercept('startTrip', () => {
       if (!ready() || pending || state.draft || state.startedAt) return;
       pending = true; $('idleStatus').textContent = 'Žádám o přístup k GPS…';
-      send({action: 'start', odometerStart: loadOdometer()});
+      send({action: 'start', odometerStart: loadOdometer(), userId: window.rideAccount.user.id});
     });
     intercept('stopTrip', () => {
       if (!state.startedAt || state.draft) return;

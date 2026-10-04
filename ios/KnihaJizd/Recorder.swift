@@ -9,6 +9,7 @@ struct Ride: Codable, Identifiable {
     var distanceKm = 0.0
     var route: [[Double]] = []
     var odometerStart: Double?
+    var userId: String?
 }
 
 @MainActor final class Recorder: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -20,6 +21,7 @@ struct Ride: Codable, Identifiable {
     private var gap = true
     private var pendingStart = false
     private var pendingOdometer = 0.0
+    private var pendingUserId: String?
     private var pendingProbe = false
     private let file: URL
     override init() {
@@ -44,13 +46,13 @@ struct Ride: Codable, Identifiable {
             } catch { message = "Záznam se nepodařilo přečíst. Původní soubor zůstává v zařízení." }
         }
     }
-    func start(odometer: Double = 0) {
+    func start(odometer: Double = 0, userId: String? = nil) {
         guard ride == nil else { return }
         guard CLLocationManager.locationServicesEnabled() else { message = "Zapni polohové služby v Nastavení."; return }
         switch manager.authorizationStatus {
-        case .notDetermined: pendingStart = true; pendingOdometer = odometer; manager.requestWhenInUseAuthorization()
+        case .notDetermined: pendingStart = true; pendingOdometer = odometer; pendingUserId = userId; manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
-            ride = Ride(); ride?.odometerStart = odometer; speedKmh = 0; last = nil; gap = true; persist()
+            ride = Ride(); ride?.odometerStart = odometer; ride?.userId = userId; speedKmh = 0; last = nil; gap = true; persist()
             message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
         default: message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
         }
@@ -74,7 +76,7 @@ struct Ride: Codable, Identifiable {
             manager.requestLocation()
         }
         if pendingStart && [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) {
-            pendingStart = false; start(odometer: pendingOdometer)
+            pendingStart = false; start(odometer: pendingOdometer, userId: pendingUserId)
         }
     }
     func retry() {

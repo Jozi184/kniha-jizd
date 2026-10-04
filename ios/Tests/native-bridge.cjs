@@ -1,10 +1,10 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync(require('path').join(__dirname,'../KnihaJizd/NativeBridge.js'),'utf8');
-function setup(origin='https://kniha-jizd-joe.josef-dolezal838830.chatgpt.site') {
+function setup(origin='https://jozi184.github.io') {
  const messages=[],elements={};let ok=false, originalCalls=0;
  const $=id=>elements[id]||(elements[id]={events:{},classList:{hidden:false,add(){this.hidden=true},remove(){this.hidden=false},contains(){return this.hidden}},addEventListener(type,fn,capture){(this.events[type]??=[]).push({fn,capture})}});
- const context={location:{origin},window:{webkit:{messageHandlers:{nativeRide:{postMessage:m=>messages.push(m)}}}},document:{hidden:false,addEventListener(){}},storageReady:true,storageBusy:false,state:{startedAt:null,draft:null,timerId:null},log:{trips:[]},$,setTimeout(){},setInterval:()=>1,clearInterval(){},localRemove(){},prepareFinish(){},formatOdometer:String,renderLive(){},loadOdometer:()=>100,getTrips:()=>context.log.trips,discardDraft(){context.state.draft=null;context.state.startedAt=null},persistLog:async()=>ok,watchGps(){},alert(){}};
- context.window.top=context.window;
+ const context={location:{origin},window:{webkit:{messageHandlers:{nativeRide:{postMessage:m=>messages.push(m)}}}},rideAccount:{user:{id:'test-user'}},document:{hidden:false,addEventListener(){}},storageReady:true,storageBusy:false,state:{startedAt:null,draft:null,timerId:null},log:{trips:[]},$,setTimeout(){},setInterval:()=>1,clearInterval(){},localRemove(){},prepareFinish(){},formatOdometer:String,renderLive(){},loadOdometer:()=>100,getTrips:()=>context.log.trips,discardDraft(){context.state.draft=null;context.state.startedAt=null},persistLog:async()=>ok,watchGps(){},alert(){}};
+ context.window.top=context.window;context.window.rideAccount=context.rideAccount;
  function click(id){const event={preventDefault(){},stopImmediatePropagation(){this.stopped=true}};for(const h of $(id).events.click||[]){h.fn(event);if(event.stopped)break}}
  vm.createContext(context);vm.runInContext(source,context);
  return {context,messages,click,setOk:v=>ok=v};
