@@ -55,8 +55,8 @@ struct LogWebView: UIViewRepresentable {
         }
         func publish() {
             guard let web, web.url?.scheme == "https", web.url?.host == LogWebView.site.host, web.url?.path.hasPrefix("/kniha-jizd/") == true else { return }
-            struct Snapshot: Encodable { var ride: Ride?; var message: String; var speedKmh: Double }
-            guard let data = try? JSONEncoder().encode(Snapshot(ride: recorder.ride, message: recorder.message, speedKmh: recorder.speedKmh)),
+            struct Snapshot: Encodable { var ride: Ride?; var message: String; var speedKmh: Double?; var accuracyMetres: Double?; var lastLocationAtMs: Double? }
+            guard let data = try? JSONEncoder().encode(Snapshot(ride: recorder.ride, message: recorder.message, speedKmh: recorder.speedKmh, accuracyMetres: recorder.accuracyMetres, lastLocationAtMs: recorder.lastLocationAtMs)),
                   let json = String(data: data, encoding: .utf8) else { return }
             web.evaluateJavaScript("window.__receiveNativeRide && window.__receiveNativeRide(\(json));", completionHandler: nil)
         }

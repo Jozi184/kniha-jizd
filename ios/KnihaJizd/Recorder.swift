@@ -14,7 +14,9 @@ struct Ride: Codable, Identifiable {
 
 @MainActor final class Recorder: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var ride: Ride?
-    @Published var speedKmh = 0.0
+    @Published var speedKmh: Double?
+    @Published var accuracyMetres: Double?
+    @Published var lastLocationAtMs: Double?
     @Published var message = "Připraveno k jízdě"
     private let manager = CLLocationManager()
     private var last: CLLocation?
@@ -52,7 +54,8 @@ struct Ride: Codable, Identifiable {
         switch manager.authorizationStatus {
         case .notDetermined: pendingStart = true; pendingOdometer = odometer; pendingUserId = userId; manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
-            ride = Ride(); ride?.odometerStart = odometer; ride?.userId = userId; speedKmh = 0; last = nil; gap = true; persist()
+            accuracyMetres = nil; lastLocationAtMs = nil
+            ride = Ride(); ride?.odometerStart = odometer; ride?.userId = userId; speedKmh = nil; last = nil; gap = true; persist()
             message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
         default: message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
         }
@@ -82,6 +85,7 @@ struct Ride: Codable, Identifiable {
     func retry() {
         guard ride != nil, ride?.endedAt == nil else { return }
         manager.stopUpdatingLocation(); last = nil; gap = true
+        accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil
         manager.startUpdatingLocation(); message = "Hledám přesnou GPS polohu…"
     }
     func stop() {
@@ -89,7 +93,7 @@ struct Ride: Codable, Identifiable {
         manager.stopUpdatingLocation(); ride?.endedAt = Date().timeIntervalSince1970 * 1000
         last = nil; persist(); message = "Jízda čeká na uložení nebo zahození."
     }
-    func discard() { manager.stopUpdatingLocation(); ride = nil; last = nil; try? FileManager.default.removeItem(at: file); message = "Připraveno k jízdě" }
+    func discard() { manager.stopUpdatingLocation(); ride = nil; last = nil; accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil; try? FileManager.default.removeItem(at: file); message = "Připraveno k jízdě" }
     func acknowledge(_ id: String) { if ride?.id == id && ride?.endedAt != nil { discard() } }
     private func persist() {
         guard let ride else { return }
@@ -106,8 +110,21 @@ struct Ride: Codable, Identifiable {
         }
         guard ride != nil, ride?.endedAt == nil else { return }
         for point in locations.sorted(by: { $0.timestamp < $1.timestamp }) {
-            guard point.horizontalAccuracy >= 0, point.horizontalAccuracy <= 60,
-                  abs(point.timestamp.timeIntervalSinceNow) < 30 else { gap = true; continue }
+            guard point.horizontalAccuracy >= 0 else {
+                gap = true; speedKmh = nil; message = "GPS zatím nemá použitelnou polohu."; continue
+            }
+            accuracyMetres = point.horizontalAccuracy
+            lastLocationAtMs = point.timestamp.timeIntervalSince1970 * 1000
+            guard abs(point.timestamp.timeIntervalSinceNow) < 30 else {
+                gap = true; speedKmh = nil; message = "Čekám na novou GPS polohu…"; continue
+            }
+            guard point.horizontalAccuracy <= 60 else {
+                gap = true; speedKmh = nil
+                message = manager.accuracyAuthorization == .reducedAccuracy
+                    ? "Zapni Přesnou polohu pro lepší měření."
+                    : "Slabá GPS: přesnost přibližně ±\(Int(point.horizontalAccuracy)) m. Vzdálenost zatím nepřičítám."
+                continue
+            }
             var count = false
             if let previous = last {
                 let dt = point.timestamp.timeIntervalSince(previous.timestamp)
@@ -132,13 +149,13 @@ struct Ride: Codable, Identifiable {
                 }
                 gap = false
             }
-            speedKmh = max(0, point.speed * 3.6)
+            speedKmh = point.speed.isFinite && point.speed >= 0 && point.speedAccuracy >= 0 ? point.speed * 3.6 : nil
             last = point
             message = manager.accuracyAuthorization == .reducedAccuracy ? "Zapni Přesnou polohu pro lepší měření." : "GPS zaznamenává jízdu"
             persist()
         }
     }
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        pendingProbe = false; gap = true; last = nil; message = "GPS: \(error.localizedDescription)"
+        pendingProbe = false; gap = true; last = nil; speedKmh = nil; message = "GPS: \(error.localizedDescription)"
     }
 }

@@ -27,6 +27,9 @@ V Xcode použij Integrate → Pull (ve starších verzích Source Control → Pu
 
 ## GPS a omezení
 
+Nativní most předává přesnost polohy a čas poslední přijaté polohy. Slabý signál a výpadek nových poloh se zobrazí ve stavu GPS. Rychlost z Core Location se převádí z m/s na km/h; nedostupná rychlost nebo poloha starší než 30 sekund se zobrazuje jako pomlčka. Skutečná naměřená nula zůstává nulou.
+
+
 Location updates je jediný potřebný Background Mode. Core Location přijímá polohy s přesností do 60 m, ignoruje kroky pod 3 m a rychlost nad 220 km/h. Mezery delší než 30 s nespojuje do naměřené vzdálenosti. Po pádu nebo novém spuštění nabídne zachráněnou jízdu ke kontrole; chybějící pohyb nedopočítává.
 
 Bezplatný Personal Team vyžaduje pravidelné obnovení instalace přes Xcode. Po násilném ukončení aplikace uživatelem nebo restartu telefonu iOS nezaručuje pokračování záznamu. Testuj zamčení, návrat do aplikace, výpadek sítě, oprávnění, uložení a zahození. Aplikaci při řízení neovládej.

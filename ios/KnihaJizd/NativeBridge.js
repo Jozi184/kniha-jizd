@@ -11,7 +11,7 @@
   const timer = () => { clearInterval(state.timerId); state.timerId = setInterval(renderLive, 1000); };
   function apply() {
     if (!ready() || !latest || !window.rideAccount?.user) return;
-    const {ride, message, speedKmh} = latest;
+    const {ride, message, speedKmh, accuracyMetres, lastLocationAtMs} = latest;
     pending = false;
     if (!ride) {
       if (message) {
@@ -32,13 +32,18 @@
       state.startedAt = ride.startedAt;
       state.distanceKm = ride.distanceKm;
       state.route = ride.route;
-      state.latestSpeedKmh = speedKmh || 0;
+      state.latestSpeedKmh = Number.isFinite(speedKmh) && speedKmh >= 0 ? speedKmh : 0;
       state.draft = null;
       state.watchId = null;
       $('idlePanel').classList.add('hidden');
       $('finishPanel').classList.add('hidden');
       $('activePanel').classList.remove('hidden');
-      $('gpsStatus').textContent = message;
+      $('accuracyValue').textContent = Number.isFinite(accuracyMetres) && accuracyMetres >= 0 ? Math.round(accuracyMetres) : '—';
+      const stale = Number.isFinite(lastLocationAtMs) && Date.now() - lastLocationAtMs > 30000;
+      if (stale) state.latestSpeedKmh = 0;
+      $('gpsStatus').textContent = stale
+        ? 'Nová GPS poloha nepřišla déle než 30 s. Čekám na signál…'
+        : message + (Number.isFinite(lastLocationAtMs) ? ' · poloha v ' + new Date(lastLocationAtMs).toLocaleTimeString('cs-CZ') : '');
       if (!state.timerId) timer();
       renderLive();
     } else {
@@ -71,6 +76,14 @@
     if (typeof state === 'undefined' || typeof persistLog !== 'function' || !$('startTrip')) {
       setTimeout(install, 250); return;
     }
+    const originalRenderLive = renderLive;
+    renderLive = function() {
+      originalRenderLive();
+      if (!state.startedAt || !latest?.ride || latest.ride.endedAt != null) return;
+      const fresh = Number.isFinite(latest.lastLocationAtMs) && Date.now() - latest.lastLocationAtMs <= 30000;
+      const valid = fresh && Number.isFinite(latest.speedKmh) && latest.speedKmh >= 0;
+      $('speedValue').textContent = valid ? Math.round(latest.speedKmh) : '—';
+    };
     intercept('startTrip', () => {
       if (!ready() || pending || state.draft || state.startedAt) return;
       pending = true; $('idleStatus').textContent = 'Žádám o přístup k GPS…';
