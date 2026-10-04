@@ -8,15 +8,19 @@ struct Ride: Codable, Identifiable {
     var endedAt: Double?
     var distanceKm = 0.0
     var route: [[Double]] = []
+    var odometerStart: Double?
 }
 
 @MainActor final class Recorder: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var ride: Ride?
+    @Published var speedKmh = 0.0
     @Published var message = "Připraveno k jízdě"
     private let manager = CLLocationManager()
     private var last: CLLocation?
     private var gap = true
     private var pendingStart = false
+    private var pendingOdometer = 0.0
+    private var pendingProbe = false
     private let file: URL
     override init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -40,21 +44,43 @@ struct Ride: Codable, Identifiable {
             } catch { message = "Záznam se nepodařilo přečíst. Původní soubor zůstává v zařízení." }
         }
     }
-    func start() {
+    func start(odometer: Double = 0) {
         guard ride == nil else { return }
         guard CLLocationManager.locationServicesEnabled() else { message = "Zapni polohové služby v Nastavení."; return }
         switch manager.authorizationStatus {
-        case .notDetermined: pendingStart = true; manager.requestWhenInUseAuthorization()
+        case .notDetermined: pendingStart = true; pendingOdometer = odometer; manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
-            ride = Ride(); last = nil; gap = true; persist()
+            ride = Ride(); ride?.odometerStart = odometer; speedKmh = 0; last = nil; gap = true; persist()
             message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
         default: message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
         }
     }
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if pendingStart && [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) {
-            pendingStart = false; start()
+    func testGps() {
+        guard ride == nil else { message = "GPS už zaznamenává jízdu."; return }
+        pendingProbe = true
+        if manager.authorizationStatus == .notDetermined {
+            message = "Žádám o přístup k GPS…"; manager.requestWhenInUseAuthorization()
+        } else if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse {
+            message = "Hledám GPS polohu…"; manager.requestLocation()
+        } else {
+            pendingProbe = false; message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
         }
+    }
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
+            pendingStart = false; pendingProbe = false; message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
+        }
+        if pendingProbe && [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) {
+            manager.requestLocation()
+        }
+        if pendingStart && [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) {
+            pendingStart = false; start(odometer: pendingOdometer)
+        }
+    }
+    func retry() {
+        guard ride != nil, ride?.endedAt == nil else { return }
+        manager.stopUpdatingLocation(); last = nil; gap = true
+        manager.startUpdatingLocation(); message = "Hledám přesnou GPS polohu…"
     }
     func stop() {
         guard ride?.endedAt == nil, ride != nil else { return }
@@ -69,6 +95,13 @@ struct Ride: Codable, Identifiable {
         catch { message = "Zápis do zařízení selhal: \(error.localizedDescription)" }
     }
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if pendingProbe && ride == nil {
+            pendingProbe = false
+            if let point = locations.last, point.horizontalAccuracy >= 0 {
+                message = "GPS funguje. Přesnost přibližně ±\(Int(point.horizontalAccuracy)) m."
+            } else { message = "GPS zatím nezískala použitelnou polohu." }
+            return
+        }
         guard ride != nil, ride?.endedAt == nil else { return }
         for point in locations.sorted(by: { $0.timestamp < $1.timestamp }) {
             guard point.horizontalAccuracy >= 0, point.horizontalAccuracy <= 60,
@@ -97,12 +130,13 @@ struct Ride: Codable, Identifiable {
                 }
                 gap = false
             }
+            speedKmh = max(0, point.speed * 3.6)
             last = point
             message = manager.accuracyAuthorization == .reducedAccuracy ? "Zapni Přesnou polohu pro lepší měření." : "GPS zaznamenává jízdu"
             persist()
         }
     }
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        gap = true; last = nil; message = "GPS: \(error.localizedDescription)"
+        pendingProbe = false; gap = true; last = nil; message = "GPS: \(error.localizedDescription)"
     }
 }

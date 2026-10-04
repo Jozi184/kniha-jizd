@@ -1,30 +1,38 @@
-# Kniha jízd pro iPhone — první prototyp
+# Kniha jízd pro iPhone
 
-Nativní SwiftUI / Core Location záznam GPS s podporou běhu na pozadí. Minimum iOS 16. Bez externích Swift balíčků, placených služeb a vložených API klíčů.
+Nativní Core Location záznam GPS pod posledním původním PWA rozhraním. Stejné barvy, formuláře, historie, mapy, export a grafitová/limetková ikona auta. Minimum iOS 16, bez externích Swift balíčků a vložených API klíčů.
 
-## Spuštění na Macu
+## První spuštění
 
-1. Stáhni tento GitHub repozitář (Code → Download ZIP), rozbal a otevři `ios/KnihaJizd.xcodeproj`.
+1. Stáhni repozitář nebo jej naklonuj v Xcode a otevři `ios/KnihaJizd.xcodeproj`.
 2. Xcode → Settings → Accounts → přidej vlastní Apple účet.
-3. V projektu vyber target KnihaJizd → Signing & Capabilities → Team → svůj Personal Team. Případně uprav Bundle Identifier na jedinečný.
-4. Připoj iPhone kabelem, potvrď důvěru počítači a zapni na telefonu Developer Mode, pokud si ho Xcode vyžádá.
-5. Vyber iPhone jako cílové zařízení a spusť Run. Povol polohu a zapni Přesnou polohu.
-6. Zahaj jízdu nativním tlačítkem. Po ukončení otevři kontrolu a uložení; v historii se přihlas svým ChatGPT účtem, pokud bude požadováno.
+3. Target KnihaJizd → Signing & Capabilities → Team → svůj Personal Team. Případně uprav Bundle Identifier na jedinečný.
+4. Připoj a odemkni iPhone, potvrď důvěru počítači, zapni Developer Mode podle výzvy Xcode.
+5. Vyber iPhone jako cílové zařízení a spusť Run. Na iPhonu případně důvěřuj svému vývojářskému účtu v Nastavení → Obecné → VPN a správa zařízení.
+6. Aplikace otevře současné PWA rozhraní. Přihlas se svým ChatGPT účtem, pokud bude požadováno.
+7. Zahaj jízdu původním tlačítkem Zahájit GPS záznam; povol polohu a Přesnou polohu. Po ukončení zkontroluj kilometry a ulož, nebo potvrď zahození.
 
-Personal Team je bezplatný; instalace má omezenou platnost a je potřeba ji obnovovat přes Xcode. GPS testuj jako spolujezdec nebo ovládej jen při stání.
+## Aktualizace již naklonované verze
 
-## Co prototyp dělá
+V Xcode použij Integrate → Pull (ve starších verzích Source Control → Pull), ponech svou hodnotu Team a Bundle Identifier a znovu spusť Run na připojeném iPhonu. Aktualizuj aplikaci přes Xcode; nemaž ji, pokud v ní máš neuloženou jízdu.
 
-- Core Location běží mimo webovou stránku, s background location capability a viditelným indikátorem.
-- Přijímá polohy s přesností do 60 m, ignoruje kroky pod 3 m a rychlost nad 220 km/h. Mezery delší než 30 s nespojuje do naměřené vzdálenosti.
-- Rozpracovanou trasu ukládá atomicky do zařízení po každé použitelné poloze. Po pádu či novém spuštění nabídne zachráněnou jízdu ke kontrole; nedopočítává chybějící pohyb.
-- Po ukončení nabídne uložení nebo potvrzené zahození. Webový formulář přebírá trasu, kilometry a čas; mapy, místa, tachometr a export zůstávají v současné webové aplikaci.
-- Lokální záznam smaže až po potvrzeném úspěchu serverového uložení. `nativeRideId` omezuje opakované vložení po obnově stránky.
+## Rozhraní a záznam
 
-## Otevřené ověření
+- Celé rozhraní se načítá z existující privátní webové aplikace; změny designu a běžných webových funkcí se projeví bez nové instalace.
+- Bundlovaný NativeBridge.js propojuje původní tlačítka s Core Location. Start/stop nepoužívá browserovou GPS.
+- Core Location ukládá celou rozpracovanou trasu atomicky do zařízení po každé použitelné poloze. Při návratu ze zamčené obrazovky předává úplný stav, nespoléhá na běh JavaScriptu na pozadí.
+- Záznam čeká po ukončení na uložení nebo zahození ve stejném formuláři jako PWA. Lokální kopie se odstraní až po potvrzeném serverovém uložení nebo explicitním zahození. NativeRideId brání opakovanému vložení při obnovení stránky.
+- Ruční zadání včetně fotografií, tachometr s desetinnou čárkou, historie, mazání, mapy a automatické názvy míst používají původní webový kód. CSV export otevírá systémovou nabídku sdílení iOS.
+- Ikona AppIcon je převzata z PWA icon-graphite-512.png, převedena na požadovaných 1024 × 1024 bez průhlednosti. Ikona je přiřazena v obou konfiguracích sestavení.
 
-Projekt zatím nebyl zkompilován v Xcode ani otestován na iPhonu. Přihlášení přes ChatGPT ve WKWebView není ověřené: Safari a aplikace mají oddělené cookies a poskytovatel může vložený prohlížeč odmítnout. Pokud se přihlášení nezdaří, lokální GPS jízda zůstává zachována; bude potřeba doplnit podporovaný nativní přihlašovací tok. Není použit žádný servisní token ani náhrada identity uživatele.
+## GPS a omezení
 
-Webový most je prototyp navázaný na současné funkce webu. Při změně formuláře jej uprav společně s webem. Zahození ve webu ponechá nativní kopii; pro úplné odstranění použij nativní tlačítko Zahodit.
+Location updates je jediný potřebný Background Mode. Core Location přijímá polohy s přesností do 60 m, ignoruje kroky pod 3 m a rychlost nad 220 km/h. Mezery delší než 30 s nespojuje do naměřené vzdálenosti. Po pádu nebo novém spuštění nabídne zachráněnou jízdu ke kontrole; chybějící pohyb nedopočítává.
 
-Po násilném ukončení aplikace uživatelem nebo po restartu telefonu iOS nezaručuje pokračování měření. Background test musí ověřit zamčení telefonu, návrat do aplikace, výpadek sítě, zamítnutí oprávnění a opakované uložení.
+Bezplatný Personal Team vyžaduje pravidelné obnovení instalace přes Xcode. Po násilném ukončení aplikace uživatelem nebo restartu telefonu iOS nezaručuje pokračování záznamu. Testuj zamčení, návrat do aplikace, výpadek sítě, oprávnění, uložení a zahození. Aplikaci při řízení neovládej.
+
+## Stav ověření
+
+JavaScriptový most má testy pro start/stop, předání úplné trasy, zachování oprav, neúspěšné a úspěšné uložení, potvrzené zahození, zabránění duplicitám, CSV a kontrolu původu stránky. Plist a odkazy/resources v Xcode projektu jsou kontrolované. Aktualizovanou Swift část nelze v Linuxovém prostředí zkompilovat; sestavení a test na telefonu je potřeba dokončit v Xcode.
+
+Přihlášení přes ChatGPT ve WKWebView zůstává k ověření na telefonu. Safari a nativní aplikace mají oddělené cookies a poskytovatel může vložený prohlížeč odmítnout. Nepoužíváme servisní token jako náhradu identity. Pro načtení historie je potřeba síť a přihlášení; během již zahájené jízdy ukládá nativní GPS lokálně i bez sítě. Úpravy interních funkcí formuláře vyžadují kontrolu mostu a případně aktualizaci aplikace.
