@@ -12,7 +12,10 @@ struct Ride: Codable, Identifiable {
     var userId: String?
 }
 
-@MainActor final class Recorder: NSObject, ObservableObject, CLLocationManagerDelegate {
+// CLLocationManager is created on MainActor, so Core Location delivers delegate
+// callbacks on the main run loop. @preconcurrency enforces that isolation at runtime
+// for the Objective-C delegate protocol, which has no actor annotation.
+@MainActor final class Recorder: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
     @Published var ride: Ride?
     @Published var speedKmh: Double?
     @Published var accuracyMetres: Double?
@@ -50,14 +53,14 @@ struct Ride: Codable, Identifiable {
     }
     func start(odometer: Double = 0, userId: String? = nil) {
         guard ride == nil else { return }
-        guard CLLocationManager.locationServicesEnabled() else { message = "Zapni polohové služby v Nastavení."; return }
+        // Read authorization locally; its delegate callback also reports disabled services.
         switch manager.authorizationStatus {
         case .notDetermined: pendingStart = true; pendingOdometer = odometer; pendingUserId = userId; manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
             accuracyMetres = nil; lastLocationAtMs = nil
             ride = Ride(); ride?.odometerStart = odometer; ride?.userId = userId; speedKmh = nil; last = nil; gap = true; persist()
             message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
-        default: message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
+        default: message = "Povol polohu aplikaci a zapni polohové služby v Nastavení → Soukromí → Polohové služby."
         }
     }
     func testGps() {
@@ -68,12 +71,12 @@ struct Ride: Codable, Identifiable {
         } else if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse {
             message = "Hledám GPS polohu…"; manager.requestLocation()
         } else {
-            pendingProbe = false; message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
+            pendingProbe = false; message = "Povol polohu aplikaci a zapni polohové služby v Nastavení → Soukromí → Polohové služby."
         }
     }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
-            pendingStart = false; pendingProbe = false; message = "Povol polohu aplikaci v Nastavení → Soukromí → Polohové služby."
+            pendingStart = false; pendingProbe = false; speedKmh = nil; last = nil; gap = true; message = "Povol polohu aplikaci a zapni polohové služby v Nastavení → Soukromí → Polohové služby."
         }
         if pendingProbe && [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) {
             manager.requestLocation()

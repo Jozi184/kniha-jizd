@@ -34,6 +34,12 @@ Location updates je jediný potřebný Background Mode. Core Location přijímá
 
 Bezplatný Personal Team vyžaduje pravidelné obnovení instalace přes Xcode. Po násilném ukončení aplikace uživatelem nebo restartu telefonu iOS nezaručuje pokračování záznamu. Testuj zamčení, návrat do aplikace, výpadek sítě, oprávnění, uložení a zahození. Aplikaci při řízení neovládej.
 
+## Upozornění Xcode
+
+Recorder nepoužívá blokující `locationServicesEnabled()` na hlavním vlákně; oprávnění sleduje přes `authorizationStatus` a delegate callback. Správce GPS vzniká na MainActor a Core Location volá jeho delegate na stejném hlavním run loopu. Conformance `@preconcurrency` proto používá runtime kontrolu izolace pro Objective-C protokol. Xcode s kompilátorem Swift 6 nebo novějším podporuje tuto anotaci i v režimu Swift 5.
+
+Zapnuté jsou weak references a doporučené základní compiler warnings pro Debug i Release. Minimum iOS 16 je úmyslné; doporučení Xcode zvýšit deployment target se nemusí přijmout.
+
 ## Stav ověření
 
 JavaScriptový most má testy pro start/stop, předání úplné trasy, zachování oprav, neúspěšné a úspěšné uložení, potvrzené zahození, zabránění duplicitám, CSV a kontrolu původu stránky. Plist a odkazy/resources v Xcode projektu jsou kontrolované. Aktualizovanou Swift část nelze v Linuxovém prostředí zkompilovat; sestavení a test na telefonu je potřeba dokončit v Xcode.
