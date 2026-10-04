@@ -45,8 +45,12 @@ struct LogWebView: UIViewRepresentable {
             case "stop": recorder.stop()
             case "retry": recorder.retry()
             case "test": recorder.testGps()
-            case "saved": if let id = body["id"] as? String { recorder.acknowledge(id) }
-            case "discard": if let id = body["id"] as? String, recorder.ride?.id == id { recorder.discard() }
+            case "saved": if let id = body["id"] as? String, let userId = body["userId"] as? String { recorder.acknowledge(id, userId: userId) }
+            case "context":
+                if let userId = body["userId"] as? String, let value = body["odometer"] as? Double { recorder.setAccount(userId: userId, odometer: value) }
+            case "clearContext": recorder.clearAccount()
+            case "requestAlways": recorder.requestBackgroundPermission()
+            case "discard": if let id = body["id"] as? String, let userId = body["userId"] as? String { recorder.acknowledge(id, userId: userId) }
             case "export": if let csv = body["csv"] as? String, csv.utf8.count < 5_000_000 { export(csv) }
             case "snapshot": break
             default: return
@@ -55,8 +59,8 @@ struct LogWebView: UIViewRepresentable {
         }
         func publish() {
             guard let web, web.url?.scheme == "https", web.url?.host == LogWebView.site.host, web.url?.path.hasPrefix("/kniha-jizd/") == true else { return }
-            struct Snapshot: Encodable { var ride: Ride?; var message: String; var speedKmh: Double?; var accuracyMetres: Double?; var lastLocationAtMs: Double? }
-            guard let data = try? JSONEncoder().encode(Snapshot(ride: recorder.ride, message: recorder.message, speedKmh: recorder.speedKmh, accuracyMetres: recorder.accuracyMetres, lastLocationAtMs: recorder.lastLocationAtMs)),
+            struct Snapshot: Encodable { var ride: Ride?; var message: String; var speedKmh: Double?; var accuracyMetres: Double?; var lastLocationAtMs: Double?; var pendingRides: [Ride]; var backgroundReady: Bool }
+            guard let data = try? JSONEncoder().encode(Snapshot(ride: recorder.ride, message: recorder.message, speedKmh: recorder.speedKmh, accuracyMetres: recorder.accuracyMetres, lastLocationAtMs: recorder.lastLocationAtMs, pendingRides: recorder.pendingRides, backgroundReady: recorder.backgroundReady)),
                   let json = String(data: data, encoding: .utf8) else { return }
             web.evaluateJavaScript("window.__receiveNativeRide && window.__receiveNativeRide(\(json));", completionHandler: nil)
         }

@@ -15,11 +15,15 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>6</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Vyfoť tachometr pro výpočet vzdálenosti při ručním zadání jízdy.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>GPS používáme k měření vzdálenosti a trasy tebou spuštěné jízdy, i při zamčeném telefonu.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Povolení Vždy umožní spustit tebou vybranou GPS jízdu ze zamčené obrazovky nebo Zkratky bez otevření aplikace. Polohu měříme pouze během jízdy.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

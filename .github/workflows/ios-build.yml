@@ -1,0 +1,33 @@
+name: iOS build
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - 'account.js'
+      - 'index.html'
+      - 'tests/**'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: JavaScript regression checks
+        run: |
+          node ios/Tests/native-bridge.cjs
+          node tests/accounts.cjs
+      - name: Build app and widgets without signing
+        run: |
+          xcodebuild -version
+          xcodebuild -project ios/KnihaJizd.xcodeproj -scheme KnihaJizd -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/ios-build.log" 2>&1 || { cat "$RUNNER_TEMP/ios-build.log"; exit 1; }
+          tail -30 "$RUNNER_TEMP/ios-build.log"
+      - name: Build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-log
+          path: '${{ runner.temp }}/ios-build.log'

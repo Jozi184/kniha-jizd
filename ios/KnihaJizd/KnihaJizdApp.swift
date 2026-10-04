@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main struct KnihaJizdApp: App {
-    @StateObject private var recorder = Recorder()
+    @StateObject private var recorder = Recorder.shared
     var body: some Scene {
         WindowGroup {
             LogWebView(recorder: recorder)

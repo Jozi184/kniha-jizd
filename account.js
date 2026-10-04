@@ -96,7 +96,7 @@ window.rideAccount = (() => {
     };
     client.auth.onAuthStateChange((event,s)=>{
       if(event==='PASSWORD_RECOVERY'){recovering=true;setMode('update');showLogin();return;}
-      if(event==='SIGNED_OUT'){user=null;showLogin();}
+      if(event==='SIGNED_OUT'){window.__clearNativeAccount?.();user=null;showLogin();}
       if(event==='TOKEN_REFRESHED'&&s)user=s.user;
     });
     document.addEventListener('visibilitychange',()=>{

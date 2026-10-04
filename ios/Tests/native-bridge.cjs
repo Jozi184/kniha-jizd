@@ -2,8 +2,9 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync(require('path').join(__dirname,'../KnihaJizd/NativeBridge.js'),'utf8');
 function setup(origin='https://jozi184.github.io') {
  const messages=[],elements={};let ok=false, originalCalls=0;
- const $=id=>elements[id]||(elements[id]={events:{},classList:{hidden:false,add(){this.hidden=true},remove(){this.hidden=false},contains(){return this.hidden}},addEventListener(type,fn,capture){(this.events[type]??=[]).push({fn,capture})}});
- const context={location:{origin},window:{webkit:{messageHandlers:{nativeRide:{postMessage:m=>messages.push(m)}}}},rideAccount:{user:{id:'test-user'}},document:{hidden:false,addEventListener(){}},storageReady:true,storageBusy:false,state:{startedAt:null,draft:null,timerId:null},log:{trips:[]},$,setTimeout(){},setInterval:()=>1,clearInterval(){},localRemove(){},prepareFinish(){},formatOdometer:String,renderLive(){},loadOdometer:()=>100,getTrips:()=>context.log.trips,discardDraft(){context.state.draft=null;context.state.startedAt=null},persistLog:async()=>ok,watchGps(){},alert(){}};
+ const make=()=>({children:[],replaceChildren(){this.children=[]},append(...items){this.children.push(...items)},focus(){},events:{},classList:{hidden:false,add(){this.hidden=true},remove(){this.hidden=false},contains(){return this.hidden},toggle(name,value){this.hidden=value}},addEventListener(type,fn,capture){(this.events[type]??=[]).push({fn,capture})}});
+ const $=id=>elements[id]||(elements[id]=make());
+ const context={location:{origin},window:{webkit:{messageHandlers:{nativeRide:{postMessage:m=>messages.push(m)}}}},rideAccount:{user:{id:'test-user'}},document:{hidden:false,addEventListener(){},createElement:()=>make()},storageReady:true,storageBusy:false,state:{startedAt:null,draft:null,timerId:null},log:{trips:[]},$,setTimeout(){},setInterval:fn=>{context.tick=fn;return 1},clearInterval(){},localRemove(){},prepareFinish(){},formatOdometer:String,renderLive(){},loadOdometer:()=>100,getTrips:()=>context.log.trips,discardDraft(){context.state.draft=null;context.state.startedAt=null},persistLog:async()=>ok,watchGps(){},alert(){}};
  context.window.top=context.window;context.window.rideAccount=context.rideAccount;
  function click(id){const event={preventDefault(){},stopImmediatePropagation(){this.stopped=true}};for(const h of $(id).events.click||[]){h.fn(event);if(event.stopped)break}}
  vm.createContext(context);vm.runInContext(source,context);
@@ -27,5 +28,25 @@ function setup(origin='https://jozi184.github.io') {
  t.context.window.__receiveNativeRide({ride,message:'GPS',speedKmh:null,accuracyMetres:5,lastLocationAtMs:Date.now()});assert.equal(t.context.$('speedValue').textContent,'—');
  t.context.window.__receiveNativeRide({ride,message:'GPS',speedKmh:0,accuracyMetres:5,lastLocationAtMs:Date.now()});assert.equal(t.context.$('speedValue').textContent,0);
  t.context.window.__receiveNativeRide({ride,message:'GPS',speedKmh:36,accuracyMetres:5,lastLocationAtMs:Date.now()});t.context.renderLive();assert.equal(t.context.$('speedValue').textContent,36);
- console.log('Passed: speed/accuracy freshness and validity, native start/stop, background snapshot, corrections, failed save retention, save ack, confirmed discard, duplicate recovery, CSV, origin guard');
+ // Three completed segments can be reviewed independently while the next records.
+ t=setup();
+ const first={...ride,userId:'test-user',endedAt:2000};
+ const second={...first,id:'ride-2',distanceKm:2,odometerStart:101};
+ const third={...first,id:'ride-3',distanceKm:3};
+ t.context.window.__receiveNativeRide({pendingRides:[first,second,third],message:'Queue',backgroundReady:true});
+ assert.equal(t.context.state.draft,null);assert.equal(t.context.$('nativeQueueCount').textContent,3);
+ const review=index=>t.context.$('nativeQueueList').children[index].children[1].events.click[0].fn();
+ review(1);assert.equal(t.context.state.draft.nativeRideId,'ride-2');assert.equal(t.context.state.draft.odometerStart,100);assert.equal(t.context.state.draft.odometerEnd,102);
+ let count=t.messages.length;t.click('backToMain');assert.equal(t.context.state.draft,null);assert.equal(t.messages.length,count);assert.equal(t.context.$('nativeQueueCount').textContent,3);
+ review(0);t.click('confirmDiscard');assert.equal(t.messages.at(-1).action,'discard');assert.equal(t.messages.at(-1).id,first.id);assert.equal(t.messages.at(-1).userId,'test-user');
+ t.context.window.__receiveNativeRide({pendingRides:[second,third],message:'Queue'});assert.equal(t.context.$('nativeQueueCount').textContent,2);
+ t.context.loadOdometer=()=>110;review(1);assert.equal(t.context.state.draft.odometerStart,110);assert.equal(t.context.state.draft.odometerEnd,113);
+ t.setOk(false);count=t.messages.length;await t.context.persistLog(113,[t.context.state.draft]);assert.equal(t.messages.length,count);assert.equal(t.context.state.draft.nativeRideId,third.id);
+ t.setOk(true);await t.context.persistLog(113,[t.context.state.draft]);assert.ok(t.messages.some(m=>m.action==='saved'&&m.id===third.id));
+ t=setup();t.context.window.__receiveNativeRide({ride:{...ride,userId:'test-user'},pendingRides:[second,third],message:'GPS',speedKmh:36});
+ assert.equal(t.context.$('nativeQueueCount').textContent,2);assert.ok(t.context.$('nativeQueueList').children.every(row=>row.children[1].disabled));
+ t.click('stopTrip');t.context.window.__receiveNativeRide({pendingRides:[second,third,first],message:'Queue'});assert.equal(t.context.state.draft.nativeRideId,first.id);
+ t=setup();t.context.window.__receiveNativeRide({pendingRides:[{...first,userId:'other-user'}],message:'Queue'});assert.equal(t.context.$('nativeQueueCount').textContent,0);assert.equal(t.context.state.draft,null);
+ t.click('nativeAllowBackground');assert.equal(t.messages.at(-1).action,'requestAlways');t.context.window.__clearNativeAccount();assert.equal(t.messages.at(-1).action,'clearContext');
+ console.log('Passed: queue of multiple rides, review without deletion, account isolation, approval rebasing, queue during recording, lockscreen setup, logout,  speed/accuracy freshness and validity, native start/stop, background snapshot, corrections, failed save retention, save ack, confirmed discard, duplicate recovery, CSV, origin guard');
 })().catch(e=>{console.error(e);process.exit(1)});

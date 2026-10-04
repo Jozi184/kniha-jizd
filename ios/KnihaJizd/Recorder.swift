@@ -12,11 +12,31 @@ struct Ride: Codable, Identifiable {
     var userId: String?
 }
 
+struct RideAccountContext: Codable {
+    var userId: String
+    var odometer: Double
+}
+
+struct RideArchive: Codable {
+    var active: Ride?
+    var pending: [Ride] = []
+    var account: RideAccountContext?
+}
+
+enum RideActionError: LocalizedError {
+    case unavailable(String)
+    var errorDescription: String? { switch self { case .unavailable(let message): return message } }
+}
+
 // CLLocationManager is created on MainActor, so Core Location delivers delegate
 // callbacks on the main run loop. @preconcurrency enforces that isolation at runtime
 // for the Objective-C delegate protocol, which has no actor annotation.
 @MainActor final class Recorder: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
-    @Published var ride: Ride?
+    static let shared = Recorder()
+    @Published private(set) var ride: Ride?
+    @Published private(set) var pendingRides: [Ride] = []
+    @Published private(set) var backgroundReady = false
+    @Published private(set) var account: RideAccountContext?
     @Published var speedKmh: Double?
     @Published var accuracyMetres: Double?
     @Published var lastLocationAtMs: Double?
@@ -29,10 +49,13 @@ struct Ride: Codable, Identifiable {
     private var pendingUserId: String?
     private var pendingProbe = false
     private let file: URL
+    private var storageFailed = false
+    private var requestingAlways = false
+    private let live = RideLiveActivity()
     override init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        file = directory.appendingPathComponent("active-ride.json")
+        file = directory.appendingPathComponent("ride-queue.json")
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -41,27 +64,107 @@ struct Ride: Codable, Identifiable {
         manager.pausesLocationUpdatesAutomatically = false
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
-        if let data = try? Data(contentsOf: file) {
-            do {
-                var restored = try JSONDecoder().decode(Ride.self, from: data)
+        backgroundReady = manager.authorizationStatus == .authorizedAlways
+        let legacy = directory.appendingPathComponent("active-ride.json")
+        do {
+            if FileManager.default.fileExists(atPath: file.path) {
+                let archive = try JSONDecoder().decode(RideArchive.self, from: Data(contentsOf: file))
+                account = UserDefaults.standard.bool(forKey: "ride-account-disabled") ? nil : archive.account; pendingRides = archive.pending
+                // A process termination creates a gap we cannot measure. Preserve the
+                // last recorded segment for review instead of silently resuming it.
+                if var interrupted = archive.active {
+                    interrupted.endedAt = Date().timeIntervalSince1970 * 1000
+                    pendingRides.append(interrupted)
+                    try write(RideArchive(active: nil, pending: pendingRides, account: account))
+                }
+            } else if FileManager.default.fileExists(atPath: legacy.path) {
+                var restored = try JSONDecoder().decode(Ride.self, from: Data(contentsOf: legacy))
                 if restored.endedAt == nil { restored.endedAt = Date().timeIntervalSince1970 * 1000 }
-                ride = restored
-                message = "Obnovená jízda. Zkontroluj kilometry před uložením."
-                persist()
-            } catch { message = "Záznam se nepodařilo přečíst. Původní soubor zůstává v zařízení." }
+                try write(RideArchive(active: nil, pending: [restored], account: nil))
+                pendingRides = [restored]
+                try? FileManager.default.removeItem(at: legacy)
+            }
+            if !pendingRides.isEmpty { message = "Jízdy čekají na kontrolu." }
+        } catch {
+            storageFailed = true
+            message = "Záznam se nepodařilo přečíst nebo uložit. Původní soubor zůstává v zařízení."
+        }
+        // Remove orphan activities left by a terminated recording process.
+        live.finishOrphans()
+    }
+    func setAccount(userId: String, odometer: Double) {
+        guard UUID(uuidString: userId) != nil, odometer.isFinite, odometer >= 0, !storageFailed else { return }
+        let context = RideAccountContext(userId: userId, odometer: odometer)
+        guard account?.userId != userId || account?.odometer != odometer || pendingRides.contains(where: { $0.userId == nil }) else { return }
+        var migrated = pendingRides
+        for index in migrated.indices where migrated[index].userId == nil { migrated[index].userId = userId }
+        do {
+            try write(RideArchive(active: ride, pending: migrated, account: context))
+            pendingRides = migrated; account = context
+            UserDefaults.standard.set(false, forKey: "ride-account-disabled")
+        } catch { message = "Účet pro spuštění ze zamčené obrazovky se nepodařilo uložit." }
+    }
+    func clearAccount() {
+        UserDefaults.standard.set(true, forKey: "ride-account-disabled")
+        guard account != nil, !storageFailed else { return }
+        do {
+            try write(RideArchive(active: ride, pending: pendingRides, account: nil))
+            account = nil
+        } catch {
+            // Disable system starts even when disk cannot be written. The user must
+            // reopen the app to recover storage before any subsequent recording.
+            account = nil; storageFailed = true
+            message = "Odhlášení v telefonu se nepodařilo zapsat. Spouštění jízdy je zablokované."
         }
     }
-    func start(odometer: Double = 0, userId: String? = nil) {
-        guard ride == nil else { return }
-        // Read authorization locally; its delegate callback also reports disabled services.
+    func requestBackgroundPermission() {
+        requestingAlways = true
         switch manager.authorizationStatus {
-        case .notDetermined: pendingStart = true; pendingOdometer = odometer; pendingUserId = userId; manager.requestWhenInUseAuthorization()
+        case .notDetermined: manager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse: requestingAlways = false; manager.requestAlwaysAuthorization()
+        case .authorizedAlways: requestingAlways = false; message = "Spouštění ze zamčené obrazovky je připravené."
+        default: requestingAlways = false; message = "V Nastavení → Kniha jízd → Poloha vyber Vždy a zapni Přesnou polohu."
+        }
+    }
+    func startFromSystem() throws -> Bool {
+        if ride != nil { return false }
+        guard !storageFailed else { throw RideActionError.unavailable(message) }
+        guard let account else { throw RideActionError.unavailable("Nejprve otevři Knihu jízd a přihlas se ke svému účtu.") }
+        guard manager.authorizationStatus == .authorizedAlways else {
+            throw RideActionError.unavailable("Otevři Knihu jízd a povol spouštění ze zamčené obrazovky. V Nastavení polohy vyber Vždy.")
+        }
+        guard live.enabled else { throw RideActionError.unavailable("V Nastavení → Kniha jízd povol Živé aktivity.") }
+        let offset = pendingRides.filter { $0.userId == account.userId }.reduce(0) { $0 + $1.distanceKm }
+        let started = try begin(odometer: account.odometer + offset, userId: account.userId, system: true)
+        return started
+    }
+    func start(odometer: Double = 0, userId: String? = nil) {
+        guard ride == nil, !storageFailed, let userId, UUID(uuidString: userId) != nil else { return }
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            pendingStart = true; pendingOdometer = odometer; pendingUserId = userId; manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
-            accuracyMetres = nil; lastLocationAtMs = nil
-            ride = Ride(); ride?.odometerStart = odometer; ride?.userId = userId; speedKmh = nil; last = nil; gap = true; persist()
-            message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
+            do { _ = try begin(odometer: odometer, userId: userId, system: false) }
+            catch { message = error.localizedDescription }
         default: message = "Povol polohu aplikaci a zapni polohové služby v Nastavení → Soukromí → Polohové služby."
         }
+    }
+    private func begin(odometer: Double, userId: String, system: Bool) throws -> Bool {
+        guard ride == nil else { return false }
+        var started = Ride(); started.odometerStart = odometer; started.userId = userId
+        try write(RideArchive(active: started, pending: pendingRides, account: account))
+        do { try live.start(started, required: system) }
+        catch {
+            // No GPS is started if the system cannot show its visible activity.
+            // Keep the durable segment as an interrupted pending ride if rollback fails.
+            do { try write(RideArchive(active: nil, pending: pendingRides, account: account)) }
+            catch { ride = started; storageFailed = true }
+            throw error
+        }
+        accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil
+        ride = started; last = nil; gap = true
+        message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
+        return true
     }
     func testGps() {
         guard ride == nil else { message = "GPS už zaznamenává jízdu."; return }
@@ -75,6 +178,10 @@ struct Ride: Codable, Identifiable {
         }
     }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        backgroundReady = manager.authorizationStatus == .authorizedAlways
+        if requestingAlways && manager.authorizationStatus == .authorizedWhenInUse {
+            requestingAlways = false; manager.requestAlwaysAuthorization()
+        } else if backgroundReady { requestingAlways = false }
         if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
             pendingStart = false; pendingProbe = false; speedKmh = nil; last = nil; gap = true; message = "Povol polohu aplikaci a zapni polohové služby v Nastavení → Soukromí → Polohové služby."
         }
@@ -86,22 +193,47 @@ struct Ride: Codable, Identifiable {
         }
     }
     func retry() {
-        guard ride != nil, ride?.endedAt == nil else { return }
+        guard ride != nil, ride?.endedAt == nil, !storageFailed else { return }
         manager.stopUpdatingLocation(); last = nil; gap = true
         accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil
         manager.startUpdatingLocation(); message = "Hledám přesnou GPS polohu…"
     }
-    func stop() {
-        guard ride?.endedAt == nil, ride != nil else { return }
-        manager.stopUpdatingLocation(); ride?.endedAt = Date().timeIntervalSince1970 * 1000
-        last = nil; persist(); message = "Jízda čeká na uložení nebo zahození."
+    @discardableResult func stop() -> Bool {
+        pendingStart = false
+        guard var completed = ride else { return true }
+        manager.stopUpdatingLocation(); last = nil; speedKmh = nil
+        completed.endedAt = Date().timeIntervalSince1970 * 1000
+        var queued = pendingRides; queued.append(completed)
+        do {
+            try write(RideArchive(active: nil, pending: queued, account: account))
+            pendingRides = queued; ride = nil
+            live.finish(completed)
+            message = "Jízda čeká na kontrolu. Můžeš spustit další."
+            return true
+        } catch {
+            // Keep the segment and prevent a new start; retrying Stop is safe.
+            message = "Jízdu se nepodařilo uložit do telefonu. Zkus ukončení znovu."
+            return false
+        }
     }
-    func discard() { manager.stopUpdatingLocation(); ride = nil; last = nil; accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil; try? FileManager.default.removeItem(at: file); message = "Připraveno k jízdě" }
-    func acknowledge(_ id: String) { if ride?.id == id && ride?.endedAt != nil { discard() } }
+    func acknowledge(_ id: String, userId: String) {
+        guard pendingRides.contains(where: { $0.id == id && $0.userId == userId }), !storageFailed else { return }
+        let remaining = pendingRides.filter { $0.id != id }
+        do {
+            try write(RideArchive(active: ride, pending: remaining, account: account))
+            pendingRides = remaining
+            if ride == nil { message = remaining.isEmpty ? "Připraveno k jízdě" : "Jízdy čekají na kontrolu." }
+        } catch { message = "Jízda zůstává v telefonu. Odebrání z fronty se nepodařilo uložit." }
+    }
+    private func write(_ archive: RideArchive) throws {
+        try JSONEncoder().encode(archive).write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
     private func persist() {
-        guard let ride else { return }
-        do { try JSONEncoder().encode(ride).write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
-        catch { message = "Zápis do zařízení selhal: \(error.localizedDescription)" }
+        do { try write(RideArchive(active: ride, pending: pendingRides, account: account)) }
+        catch {
+            manager.stopUpdatingLocation(); storageFailed = true; speedKmh = nil
+            message = "Zápis do zařízení selhal. GPS je zastavená, aby se neztratila další jízda: \(error.localizedDescription)"
+        }
     }
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if pendingProbe && ride == nil {
@@ -111,7 +243,7 @@ struct Ride: Codable, Identifiable {
             } else { message = "GPS zatím nezískala použitelnou polohu." }
             return
         }
-        guard ride != nil, ride?.endedAt == nil else { return }
+        guard ride != nil, ride?.endedAt == nil, !storageFailed else { return }
         for point in locations.sorted(by: { $0.timestamp < $1.timestamp }) {
             guard point.horizontalAccuracy >= 0 else {
                 gap = true; speedKmh = nil; message = "GPS zatím nemá použitelnou polohu."; continue
@@ -156,6 +288,7 @@ struct Ride: Codable, Identifiable {
             last = point
             message = manager.accuracyAuthorization == .reducedAccuracy ? "Zapni Přesnou polohu pro lepší měření." : "GPS zaznamenává jízdu"
             persist()
+            if let ride { live.update(ride, message: message) }
         }
     }
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
