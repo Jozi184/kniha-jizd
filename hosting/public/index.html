@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#17191d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Kniha jízd">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-graphite-180.png">
+  <meta name="description" content="Osobní kniha jízd: GPS záznam, tachometr a přehled cest."><link rel="icon" type="image/png" href="favicon-graphite.png"><title>Kniha jízd</title>
+  <style>
+:root{color-scheme:dark;--bg:#17191d;--card:#22262b;--text:#f5f6f8;--muted:#aeb4be;--accent:#d2f85b;--line:#383e46;--ok:#d2f85b;--danger:#fca5a5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.app{max-width:680px;margin:0 auto;padding:calc(26px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom))}
+.app-head{display:flex;align-items:center;gap:13px;margin-bottom:14px}.brand-icon{width:48px;height:48px;border-radius:16px;flex:none}.app-head h1{font-size:28px;line-height:1.2;letter-spacing:-.8px;font-weight:650;margin:0}.sub{color:var(--muted);font-size:14px;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:23px;margin:20px 0;box-shadow:0 8px 24px #0000000d}
+.section-title{font-size:19px;line-height:1.4;letter-spacing:-.3px;font-weight:650;margin-bottom:18px}
+.label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+.value{font-size:36px;line-height:1.2;font-weight:650;letter-spacing:-1px;margin-top:6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.unit{font-size:18px;font-weight:400;letter-spacing:0;color:var(--muted)}
+.odometer{background:linear-gradient(140deg,#30363e,#23272c);border-color:#434b55;padding:24px;margin-top:18px}
+.odometer .value{font-size:clamp(38px,9vw,54px);letter-spacing:-1.7px;margin:16px 0 22px}
+.odometer summary{display:inline-flex;align-items:center;min-height:44px;padding:10px 14px;background:#3a4149;color:var(--text);border-radius:12px;font-size:14px;cursor:pointer;list-style:none}.odometer summary::-webkit-details-marker{display:none}.odometer details[open] summary{margin-bottom:6px}
+.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 24px}
+.summary>div{background:var(--card);border:1px solid #2d3239;border-radius:17px;padding:15px 12px;min-width:0}
+.summary .label{font-size:13px;line-height:1.4;margin:0}.summary strong{display:block;font-size:clamp(17px,4.3vw,23px);font-weight:600;letter-spacing:-.4px;margin-top:9px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#idlePanel{background:transparent;border:0;padding:0;box-shadow:none;margin-bottom:24px}
+button{font:inherit;font-weight:600;min-height:50px;width:100%;border:0;border-radius:14px;padding:14px 16px;background:var(--accent);color:#18220b;cursor:pointer;transition:background .15s,transform .15s;touch-action:manipulation}
+button:active:not(:disabled){transform:scale(.985)}button:disabled{opacity:.45;cursor:default}button.secondary{background:#2b3037;color:#eef1f5;border:1px solid #39414b}button.danger{background:#4a282d;color:#ffd7db;border:1px solid #75424a}
+#startTrip{display:flex;align-items:center;justify-content:center;gap:10px;font-size:17px;padding:18px;box-shadow:0 6px 24px #b7e74b16}
+button svg{width:20px;height:20px;flex:none}button svg+span{min-width:0}
+#testGps{width:auto;min-height:44px;background:transparent;border:0;color:var(--muted);padding:10px 0;font-size:14px;margin-top:4px}
+#exportCsv{width:auto;min-height:44px;border:0;background:transparent;color:var(--accent);padding:8px 0;font-size:14px}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.section-head .section-title{margin:0}
+.field{margin:15px 0}input,select,textarea{font:inherit;font-size:16px;min-height:48px;width:100%;padding:13px 14px;background:#1c2025;color:var(--text);border:1px solid #444d58;border-radius:12px}input::placeholder,textarea::placeholder{color:#9da6b3}textarea{min-height:86px;resize:vertical}input[type=datetime-local]{min-width:0}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.grid>div{min-width:0}.row{display:flex;gap:10px}.row>*{flex:1;min-width:0}.status{font-size:14px;line-height:1.55;color:var(--muted);margin-top:12px;overflow-wrap:anywhere}
+#storageStatus{font-size:13px;margin:0 0 12px;color:#bac2cc}#idleStatus{font-size:13px;margin:8px 0 0}#gpsStatus{background:#1b2025;border-radius:12px;padding:12px}#gpsTestResult{border-left:3px solid var(--accent);padding-left:12px}
+.live{color:var(--accent)}#activePanel .grid:first-of-type{background:#1b2025;border-radius:17px;padding:16px}#activePanel .value{font-size:clamp(24px,6vw,34px)}#activePanel .unit{font-size:16px}#finishPanel>.grid{padding:14px;background:#1b2025;border-radius:14px}
+.trip{padding:18px;margin-top:12px;background:#292e35;border:1px solid #343b45;border-radius:18px}.trip-top{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;font-weight:550;font-size:15px}.trip-top>span:last-child{color:var(--accent);font-variant-numeric:tabular-nums}.trip-meta{color:var(--muted);font-size:14px;margin-top:8px;overflow-wrap:anywhere}.pill{display:inline-block;background:#343d29;color:#d8eba8;border-radius:8px;padding:5px 10px;font-size:13px;margin-top:12px}.empty{color:var(--muted);font-size:16px}.empty:empty{display:none}#tripList>.empty{text-align:center;padding:24px 12px;border:1px dashed #454e5b;border-radius:17px}
+.small{font-size:14px;line-height:1.6;color:var(--muted)}.info-card{background:transparent;border:0;box-shadow:none;padding:0 4px}a{color:var(--accent)}details summary{font-size:14px;color:var(--muted);cursor:pointer;min-height:44px;display:flex;align-items:center}#discardConfirmation{padding:15px;background:#35282c;border-radius:14px}#discardConfirmation .row{flex-wrap:wrap}#discardConfirmation .row button{flex-basis:160px}
+.hidden{display:none!important}
+@media(min-width:650px){.app{padding-top:40px}.summary>div{padding:18px}.odometer{padding:28px}.odo-form{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.odo-form button{width:auto;margin-bottom:15px}.card{padding:26px}.info-card{padding:0 4px}}
+@media(max-width:360px){.app{padding-left:15px;padding-right:15px}.card{padding:18px}.summary{gap:7px}.summary>div{padding:13px 8px}.app-head h1{font-size:25px}.grid{gap:10px}.row{flex-wrap:wrap}.row button{flex-basis:125px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}}
+
+
+.photo-panel{padding:16px;background:#1b2025;border:1px solid #404a58;border-radius:16px;margin:18px 0}.photo-panel>summary{color:var(--accent);font-size:16px;font-weight:600}.photo-grid{display:grid;grid-template-columns:1fr;gap:18px}.photo-slot{min-width:0;padding:15px;background:#292e35;border-radius:14px}.photo-slot h3{font-size:16px;margin:0 0 12px}.photo-actions{display:flex;gap:8px;flex-wrap:wrap}.photo-upload{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 12px;background:#3a4149;color:#f5f6f8;border-radius:10px;font-size:14px;flex:1;overflow:hidden}.photo-upload input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}.photo-upload:focus-within{outline:3px solid var(--accent);outline-offset:3px}.photo-preview{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-top:12px;background:#17191d}.photo-check{display:flex;gap:10px;align-items:flex-start;font-size:14px;margin-top:12px}.photo-check input{width:22px;min-height:22px;flex:none;accent-color:var(--accent);margin-top:2px}@media(min-width:600px){.photo-grid{grid-template-columns:1fr 1fr}}
+.ride-map-details{margin-top:14px}.ride-map-details summary{color:var(--accent)}.ride-map{height:300px;width:100%;border-radius:14px;margin-top:10px;background:#e7e9e4;isolation:isolate}.ride-map-status{font-size:13px;color:var(--muted)}.ride-map .leaflet-control-zoom a{color:#17191d}.ride-map .leaflet-control-attribution{font-size:10px}.ride-map a{color:#215500}.mapy-brand{display:block;background:#fff;padding:4px;border-radius:5px}.mapy-brand img{display:block;height:30px;width:auto}
+</style>
+<script src="route-map.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="app-head"><img class="brand-icon" src="icon-graphite-192.png" alt="" width="48" height="48"><div><h1>Kniha jízd</h1><div class="sub"><span id="todayLabel"></span> · Moje cesty</div></div></header>
+
+  <div id="storageStatus" class="status" role="status" aria-live="polite">Načítám uloženou knihu jízd…</div>
+  <div id="browserHint" class="card hidden"><div class="section-title">GPS v telefonu</div><p>Pokud náhled blokuje polohu, otevři aplikaci v Safari a povol přístup k poloze.</p><a href="https://kniha-jizd-joe.josef-dolezal838830.chatgpt.site" target="_blank" rel="noopener">Otevřít aplikaci v prohlížeči</a></div>
+  <div class="card odometer">
+    <div class="label">Aktuální tachometr</div>
+    <div class="value"><span id="odometerValue">0</span> <span class="unit">km</span></div>
+    <details><summary>Upravit stav</summary><div class="odo-form"><div class="field">
+      <label for="odometerInput" class="label">Nový stav tachometru</label><input id="odometerInput" type="number" inputmode="decimal" placeholder="Nastavit stav tachometru">
+    </div>
+    <button class="secondary" id="saveOdometer">Uložit tachometr</button></div></details>
+  </div>
+
+  <div class="summary"><div><span class="label">Tento měsíc</span><strong id="monthKm">0 km</strong></div><div><span class="label">Služební</span><strong id="businessKm">0 km</strong></div><div><span class="label">Počet jízd</span><strong id="monthTrips">0</strong></div></div>
+
+  <div id="idlePanel" class="card">
+    <div class="section-title">Nová jízda</div>
+    <div class="status hidden" id="gpsTestResult" role="status" aria-live="polite"></div>
+    <details id="gpsDetails" class="hidden" style="margin:12px 0"><summary>Podrobnosti testu GPS</summary><div id="gpsEnvironment" class="status"></div></details>
+    <div id="gpsHelp" class="hidden status"><p>V iPhonu zkontroluj:</p><ol><li>Nastavení → Soukromí a zabezpečení → Polohové služby → Webové stránky Safari: povol polohu při používání a přesnou polohu.</li><li>V Safari otevři nabídku stránky → Nastavení webového serveru → Poloha: Povolit nebo Zeptat se.</li></ol><p>Potom obnov stránku a znovu stiskni Otestovat GPS.</p></div>
+    <button id="startTrip"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"></path></svg><span>Zahájit GPS záznam</span></button>
+    <button class="secondary" id="manualTrip" style="margin-top:10px">Zadat jízdu ručně</button><div class="status" id="idleStatus">GPS se aktivuje až po zahájení jízdy.</div>
+    <button class="secondary" id="testGps" type="button">Otestovat GPS</button>
+  </div>
+
+  <div id="activePanel" class="card hidden">
+    <div class="section-title live">Jízda probíhá</div>
+    <div class="grid">
+      <div>
+        <div class="label">Vzdálenost</div>
+        <div class="value"><span id="distanceValue">0.000</span> <span class="unit">km</span></div>
+      </div>
+      <div>
+        <div class="label">Doba</div>
+        <div class="value" id="durationValue">00:00</div>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <div>
+        <div class="label">Rychlost</div>
+        <div><strong><span id="speedValue">0</span> km/h</strong></div>
+      </div>
+      <div>
+        <div class="label">GPS přesnost</div>
+        <div><strong><span id="accuracyValue">—</span> m</strong></div>
+      </div>
+    </div>
+    <div class="status" id="gpsStatus" role="status" aria-live="polite">Čekám na GPS…</div><button class="secondary" id="retryGps" type="button" style="margin-top:10px">Zkusit GPS znovu</button>
+    <div style="margin-top:16px">
+      <button class="danger" id="stopTrip">Ukončit jízdu</button>
+    </div>
+  </div>
+
+  <div id="finishPanel" class="card hidden">
+    <button class="secondary hidden" id="backToMain" type="button" style="margin-bottom:16px">Zpět</button>
+    <div class="section-title" id="finishTitle">Uložit jízdu</div>
+    <div class="grid">
+      <div>
+        <div class="label">Ujeto</div>
+        <div><strong><span id="finalDistance">0</span> km</strong></div>
+      </div>
+      <div>
+        <div class="label">Tachometr po jízdě</div>
+        <div><strong><span id="finalOdometer">0</span> km</strong></div>
+      </div>
+    </div>
+    <details id="photoPanel" class="photo-panel hidden">
+      <summary>Vypočítat kilometry z fotek tachometru</summary>
+      <p class="small">Vyfoť zblízka celkový stav kilometrů na začátku a na konci jízdy. Po přečtení zkontroluj čísla a potvrď rozdíl.</p>
+      <div class="photo-grid">
+        <section class="photo-slot">
+          <h3>Začátek jízdy</h3>
+          <div class="photo-actions"><label class="photo-upload">Vyfotit<input id="photoStartCamera" type="file" accept="image/*" capture="environment"></label><label class="photo-upload">Vybrat fotku<input id="photoStartFile" type="file" accept="image/*"></label></div>
+          <img id="photoStartPreview" class="hidden photo-preview" alt="Tachometr na začátku jízdy">
+          <p id="photoStartStatus" class="status" role="status" aria-live="polite"></p>
+          <div id="photoStartCandidates" class="hidden field"><label class="label" for="photoStartSelect">Vyber celkový stav kilometrů</label><select id="photoStartSelect"></select></div>
+          <label class="label" for="photoStartValue">Stav na začátku (km)</label><input id="photoStartValue" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Zkontroluj nebo doplň číslo">
+        </section>
+        <section class="photo-slot">
+          <h3>Konec jízdy</h3>
+          <div class="photo-actions"><label class="photo-upload">Vyfotit<input id="photoEndCamera" type="file" accept="image/*" capture="environment"></label><label class="photo-upload">Vybrat fotku<input id="photoEndFile" type="file" accept="image/*"></label></div>
+          <img id="photoEndPreview" class="hidden photo-preview" alt="Tachometr na konci jízdy">
+          <p id="photoEndStatus" class="status" role="status" aria-live="polite"></p>
+          <div id="photoEndCandidates" class="hidden field"><label class="label" for="photoEndSelect">Vyber celkový stav kilometrů</label><select id="photoEndSelect"></select></div>
+          <label class="label" for="photoEndValue">Stav na konci (km)</label><input id="photoEndValue" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Zkontroluj nebo doplň číslo">
+        </section>
+      </div>
+      <p class="status" id="photoDifference" role="status" aria-live="polite">Nahraj obě fotky nebo doplň oba stavy.</p>
+      <label class="photo-check"><input id="photoConfirmed" type="checkbox"> Zkontroloval jsem oba celkové stavy kilometrů.</label>
+      <button id="applyPhotoDistance" type="button" style="margin-top:14px">Použít rozdíl</button>
+      <button id="clearPhotos" class="secondary" type="button" style="margin-top:10px">Zrušit výpočet z fotek</button>
+      <p class="small">Fotky se zpracují v telefonu a neukládají se do historie. Při prvním čtení je potřeba internet pro načtení rozpoznávání.</p>
+    </details>
+    <div class="field"><label for="tripDate" class="label">Datum a čas začátku</label><input id="tripDate" type="datetime-local"></div><div class="grid"><div class="field"><label for="tripFrom" class="label">Odkud</label><input id="tripFrom" placeholder="Např. Praha"></div><div class="field"><label for="tripTo" class="label">Kam</label><input id="tripTo" placeholder="Např. Brno"></div></div><div class="field"><label for="correctedKm" class="label">Skutečně ujeto (km)</label><input id="correctedKm" type="number" min="0" step="0.001" inputmode="decimal"><div class="small">Vzdálenost z GPS je předvyplněná. Pokud potřebuješ, uprav ji podle tachometru auta. 0,001 km = 1 metr.</div></div><div class="field">
+      <label for="tripType" class="label">Typ jízdy</label>
+      <select id="tripType">
+        <option value="Soukromá">Soukromá</option>
+        <option value="Služební">Služební</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="tripNote" class="label">Účel / poznámka</label>
+      <textarea id="tripNote" placeholder="Např. cesta do kanceláře"></textarea>
+    </div>
+    <div id="finishStatus" class="status" role="status" aria-live="polite"></div>
+    <div class="row">
+      <button id="saveTrip">Uložit</button>
+      <button class="secondary" id="discardTrip" type="button">Zahodit</button>
+    </div>
+    <div id="discardConfirmation" class="hidden" role="group" aria-labelledby="discardPrompt" style="margin-top:16px">
+      <p id="discardPrompt">Zahodit tuto neuloženou jízdu?</p>
+      <div class="row">
+        <button class="secondary" id="keepDraft" type="button">Pokračovat v zadávání</button>
+        <button class="danger" id="confirmDiscard" type="button">Ano, zahodit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head"><div class="section-title">Historie jízd</div><button class="secondary" id="exportCsv">Export CSV</button></div>
+    <div id="tripList">Zatím žádné jízdy.</div>
+  </div>
+
+  <div class="card info-card">
+    <div class="small">
+      GPS vzdálenost je počítaná z přijatých bodů a filtruje nepřesné polohy a podezřelé skoky.
+      Na iOS může být webová aplikace po zamknutí telefonu nebo delším běhu na pozadí uspána, proto je tato verze určená hlavně pro testování workflow.
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = {
+  watchId: null,
+  timerId: null,
+  startedAt: null,
+  lastPoint: null,
+  distanceKm: 0,
+  latestSpeedKmh: 0,
+  route: [],
+  routeBreak: true,
+  draft: null
+};
+
+let log = {odometerKm:0,trips:[],revision:0};
+let storageReady = false;
+function localGet(key){try{return localStorage.getItem(key)}catch{return null}}
+function localSet(key,value){try{localStorage.setItem(key,value)}catch{}}
+function localRemove(key){try{localStorage.removeItem(key)}catch{}}
+function loadOdometer(){return log.odometerKm;}
+function getTrips(){return log.trips;}
+function savingControls(disabled){
+  for(const id of ['saveOdometer','saveTrip','startTrip','manualTrip','discardTrip','backToMain','confirmDiscard']) $(id).disabled=disabled;
+}
+async function requestLog(method,body){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),15000);
+  try{
+    const response=await fetch('/api/log',{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal});
+    const data=await response.json();
+    if(!response.ok) throw new Error(data.error || 'Ukládání je nedostupné.');
+    return data;
+  }finally{clearTimeout(timeout)}
+}
+async function persistLog(odometerKm,trips){
+  if(!storageReady) return false;
+  savingControls(true);
+  $('storageStatus').textContent='Ukládám…';
+  try{
+    const result=await requestLog('PUT',{odometerKm,trips,revision:log.revision});
+    log={odometerKm,trips,revision:result.revision};
+    localSet('odometerKm',String(odometerKm));
+    localSet('trips',JSON.stringify(trips));
+    renderOdometer();renderTrips();
+    $('storageStatus').textContent='Uloženo k tvému účtu.';
+    return true;
+  }catch(err){
+    $('storageStatus').textContent='Nepodařilo se uložit: '+err.message+' Zadané údaje zůstávají ve formuláři.';
+    return false;
+  }finally{savingControls(false)}
+}
+async function initializeLog(){
+  savingControls(true);
+  try{
+    const data=await requestLog('GET');
+    log={odometerKm:data.odometerKm,trips:data.trips,revision:data.revision};
+    // Bring existing device records across only when this account has no saved log.
+    const previousOdometer=localGet('odometerKm');
+    let previousTrips=[];try{previousTrips=JSON.parse(localGet('trips')||'[]')}catch{}
+    storageReady=true;
+    if(data.empty && (previousOdometer!==null || previousTrips.length)){
+      const migrated=await persistLog(Number(previousOdometer||0),previousTrips);
+      if(!migrated) throw new Error('Přenos původních záznamů se nezdařil.');
+    }else $('storageStatus').textContent='Kniha jízd načtena.';
+    renderOdometer();renderTrips();restoreActiveTrip();
+    savingControls(false);
+  }catch(err){
+    storageReady=false;savingControls(true);
+    $('storageStatus').textContent='Knihu jízd nelze načíst: '+err.message+' Zkontroluj připojení a obnov stránku.';
+  }
+}
+
+function renderOdometer(){
+  $('odometerValue').textContent = loadOdometer().toFixed(1);
+}
+function haversine(a,b){
+  const R=6371;
+  const toRad=x=>x*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
+  const lat1=toRad(a.lat), lat2=toRad(b.lat);
+  const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function fmtDuration(ms){
+  const s=Math.floor(ms/1000);
+  const hh=Math.floor(s/3600), mm=Math.floor((s%3600)/60), ss=s%60;
+  return hh>0 ? [hh,mm,ss].map(x=>String(x).padStart(2,'0')).join(':')
+              : [mm,ss].map(x=>String(x).padStart(2,'0')).join(':');
+}
+function renderLive(){
+  if(state.startedAt) localSet('activeTrip',JSON.stringify({startedAt:state.startedAt,distanceKm:state.distanceKm,route:state.route}));
+  $('distanceValue').textContent=state.distanceKm.toFixed(3);
+  $('speedValue').textContent=Math.round(state.latestSpeedKmh || 0);
+  if(state.startedAt) $('durationValue').textContent=fmtDuration(Date.now()-state.startedAt);
+}
+function positionUpdate(pos){
+  if(!state.startedAt || state.draft)return;
+  const c=pos.coords;
+  if(!Number.isFinite(c.latitude)||!Number.isFinite(c.longitude)||!Number.isFinite(c.accuracy))return;
+  $('accuracyValue').textContent=Math.round(c.accuracy);
+  $('gpsStatus').textContent='GPS aktivní · poloha přijata v '+new Date(pos.timestamp).toLocaleTimeString('cs-CZ')+'.';
+  const p={lat:c.latitude, lon:c.longitude, acc:c.accuracy, t:pos.timestamp};
+
+  // Ignore inaccurate points.
+  if(c.accuracy > 60){state.routeBreak=true;$('gpsStatus').textContent='Poloha přijata, ale přesnost je '+Math.round(c.accuracy)+' m. Čekám na přesnější polohu; vzdálenost zatím nepřičítám.';return;}
+
+  let routeAccepted=!state.lastPoint;
+  if(state.lastPoint){
+    const km=haversine(state.lastPoint,p);
+    const dt=(p.t-state.lastPoint.t)/1000;
+    const impliedKmh=dt>0 ? km/dt*3600 : 0;
+
+    // Filter GPS jumps and tiny jitter.
+    if(km >= 0.003 && impliedKmh < 220){
+      state.distanceKm += km;
+      routeAccepted=dt>0;
+    }
+  }
+  if(routeAccepted){appendRoutePoint(state.route,p,state.routeBreak);state.routeBreak=false;}
+  else if(state.lastPoint && haversine(state.lastPoint,p)>=0.003)state.routeBreak=true;
+  state.lastPoint=p;
+  state.latestSpeedKmh=Number.isFinite(c.speed) && c.speed>=0 ? c.speed*3.6 : 0;
+  renderLive();
+}
+function gpsContext(){
+  let embedded=false;try{embedded=window.self!==window.top}catch{embedded=true}
+  const policy=document.permissionsPolicy || document.featurePolicy;
+  let policyAllowed=null;
+  try{if(policy?.allowsFeature) policyAllowed=policy.allowsFeature('geolocation')}catch{}
+  return {embedded,policyAllowed,secure:window.isSecureContext,available:!!navigator.geolocation};
+}
+function gpsBlockReason(){
+  const c=gpsContext();
+  if(c.secure===false) return 'GPS vyžaduje zabezpečenou stránku HTTPS. Otevři přímý odkaz na aplikaci.';
+  if(!c.available) return 'Tento prohlížeč neposkytuje přístup k poloze.';
+  if(c.policyAllowed===false) return c.embedded
+    ? 'Přístup k poloze blokuje vložený náhled. Otevři přímý odkaz na aplikaci v samostatné kartě.'
+    : 'Přístup k poloze blokuje bezpečnostní pravidlo webu. Změna oprávnění Safari to nevyřeší; tuto hlášku pošli správci aplikace.';
+  return null;
+}
+function gpsErrorMessage(err){
+  const blocked=gpsBlockReason();
+  if(blocked) return blocked;
+  const messages={
+    1:'Prohlížeč odmítl přístup k poloze (chyba 1). Zkontroluj oprávnění této stránky v Safari a polohové služby pro Webové stránky Safari. Aplikace nemůže zamítnuté oprávnění sama změnit.',
+    2:'Poloha není dostupná (chyba 2). Zkontroluj polohové služby telefonu a zkus test venku.',
+    3:'Poloha nepřišla v časovém limitu (chyba 3). Zkus test venku s odemčeným telefonem.'
+  };
+  return messages[err.code] || 'GPS chyba: '+err.message;
+}
+function showGpsDetails(){
+  const c=gpsContext();
+  $('gpsDetails').classList.remove('hidden');
+  $('gpsEnvironment').textContent='Web: '+location.hostname+' · '+(c.embedded?'vložený náhled':'samostatná stránka')+' · HTTPS: '+(c.secure?'ano':'ne')+' · Pravidlo webu: '+(c.policyAllowed===null?'nelze zjistit':c.policyAllowed?'povoleno':'blokováno');
+  if(navigator.permissions?.query){
+    navigator.permissions.query({name:'geolocation'}).then(p=>{
+      const labels={granted:'povoleno',denied:'zamítnuto',prompt:'má se zeptat'};
+      $('gpsEnvironment').textContent+=' · Oprávnění: '+(labels[p.state]||p.state);
+    }).catch(()=>{});
+  }
+}
+function positionError(err){
+  $('gpsStatus').textContent=gpsErrorMessage(err);
+  $('gpsHelp').classList.remove('hidden');
+  if(gpsContext().embedded) $('browserHint').classList.remove('hidden');
+}
+let gpsTestGeneration=0;
+$('testGps').addEventListener('click',()=>{
+  const generation=++gpsTestGeneration;
+  const output=$('gpsTestResult');
+  output.classList.remove('hidden');
+  $('gpsHelp').classList.add('hidden');
+  showGpsDetails();
+  const blocked=gpsBlockReason();
+  if(blocked){output.textContent=blocked;return;}
+  output.textContent='Žádám o polohu… Pokud se objeví žádost, povol přístup. Test jízdu neukládá.';
+  $('testGps').disabled=true;
+  const finish=message=>{if(generation!==gpsTestGeneration)return;clearTimeout(deadline);output.textContent=message;$('testGps').disabled=false;};
+  const deadline=setTimeout(()=>{finish('Prohlížeč zatím neodpověděl. Zkontroluj, zda nečeká žádost o povolení, a nastavení polohy.');gpsTestGeneration++;$('gpsHelp').classList.remove('hidden');},25000);
+  try{
+    navigator.geolocation.getCurrentPosition(pos=>{
+      finish('GPS funguje. Poloha přijata, přesnost přibližně '+Math.round(pos.coords.accuracy)+' m. '+(pos.coords.accuracy>60?'Pro záznam jízdy počkej venku na přesnost do 60 m.':'Můžeš zahájit GPS záznam.'));
+    },err=>{finish(gpsErrorMessage(err));if(generation===gpsTestGeneration)$('gpsHelp').classList.remove('hidden');},{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  }catch(err){finish('Požadavek na polohu se nepodařilo spustit: '+err.message);}
+});
+function watchGps(){
+  if(state.watchId!==null) navigator.geolocation.clearWatch(state.watchId);
+  state.watchId=null;
+  const blocked=gpsBlockReason();
+  if(blocked){$('gpsStatus').textContent=blocked;return;}
+  state.lastPoint=null;state.routeBreak=true;
+  $('gpsStatus').textContent='Čekám na GPS. Pokud se objeví žádost, povol přístup k poloze.';
+  try{state.watchId=navigator.geolocation.watchPosition(positionUpdate,positionError,{enableHighAccuracy:true,maximumAge:0,timeout:20000})}
+  catch(err){$('gpsStatus').textContent='GPS nelze spustit: '+err.message;}
+}
+$('retryGps').addEventListener('click',()=>{if(state.startedAt && !state.draft) watchGps()});
+
+$('saveOdometer').addEventListener('click',async()=>{
+  if(state.startedAt || state.draft) return alert("Tachometr změň až po uložení jízdy.");
+  if(!$("odometerInput").value.trim()) return alert("Zadej stav tachometru.");
+  const v=Number($('odometerInput').value);
+  if(!Number.isFinite(v) || v<0) return alert('Zadej platný stav tachometru.');
+  if(await persistLog(v,getTrips())) $('odometerInput').value='';
+});
+
+$('startTrip').addEventListener('click',()=>{
+  const blocked=gpsBlockReason();
+  if(blocked){$('idleStatus').textContent=blocked;showGpsDetails();if(gpsContext().embedded)$('browserHint').classList.remove('hidden');return;}
+  state.startedAt=Date.now();
+  state.lastPoint=null;
+  state.distanceKm=0;state.route=[];state.routeBreak=true;
+  state.latestSpeedKmh=0;
+  $('idlePanel').classList.add('hidden');
+  $('activePanel').classList.remove('hidden');
+  $('gpsStatus').textContent='Žádám o přístup k GPS…';
+  renderLive();
+  watchGps();
+  state.timerId=setInterval(renderLive,1000);
+});
+
+$('stopTrip').addEventListener('click',()=>{
+  if(state.watchId!==null) navigator.geolocation.clearWatch(state.watchId);
+  clearInterval(state.timerId);
+  const end=Date.now();
+  state.draft={
+    startedAt:state.startedAt,
+    endedAt:end,
+    distanceKm:state.distanceKm,
+    route:state.route.slice(),
+    odometerStart:loadOdometer(),
+    odometerEnd:loadOdometer()+state.distanceKm
+  };
+  prepareFinish();
+  $('finalDistance').textContent=state.distanceKm.toFixed(3);
+  $('finalOdometer').textContent=state.draft.odometerEnd.toFixed(1);
+  $('activePanel').classList.add('hidden');
+  $('finishPanel').classList.remove('hidden');
+});
+
+$('saveTrip').addEventListener('click',async()=>{
+  if(!state.draft) return;
+  if(state.draft.photoDirty){$('photoDifference').textContent='Zkontroluj stavy a stiskni Použít rozdíl, nebo zruš výpočet z fotek.';return;}
+  const km=Number($('correctedKm').value);
+  const start=new Date($('tripDate').value).getTime();
+  if(!$('correctedKm').value || !Number.isFinite(km) || km<=0 || !Number.isFinite(start)) return alert('Vyplň platné datum a vzdálenost větší než nula.');
+  state.draft.distanceKm=km;
+  state.draft.odometerEnd=state.draft.odometerStart+km;
+  if(state.draft.manual) state.draft.endedAt=start;
+  state.draft.startedAt=start;
+  const trip={
+    id:Date.now(),
+    from:$('tripFrom').value.trim(), to:$('tripTo').value.trim(),
+    ...state.draft,
+    type:$('tripType').value,
+    note:$('tripNote').value.trim()
+  };
+  const trips=[trip,...getTrips()];
+  if(!await persistLog(trip.odometerEnd,trips)) return;
+  $('tripNote').value='';
+  state.startedAt=null; localRemove('activeTrip');
+  state.draft=null;
+  if(typeof resetPhotoInputs==='function')resetPhotoInputs();
+  $('finishPanel').classList.add('hidden');
+  $('idlePanel').classList.remove('hidden');
+  renderTrips();
+});
+
+function discardDraft(){
+  if(typeof resetPhotoInputs==='function')resetPhotoInputs();
+  if(state.watchId!==null) navigator.geolocation.clearWatch(state.watchId);
+  clearInterval(state.timerId);
+  Object.assign(state,{watchId:null,timerId:null,startedAt:null,lastPoint:null,distanceKm:0,latestSpeedKmh:0,route:[],routeBreak:true,draft:null});
+  localRemove('activeTrip');
+  $('tripNote').value='';
+  $('discardConfirmation').classList.add('hidden');
+  $('activePanel').classList.add('hidden');
+  $('finishPanel').classList.add('hidden');
+  $('idlePanel').classList.remove('hidden');
+  $('manualTrip').focus();
+}
+$('discardTrip').addEventListener('click',()=>{
+  $('discardConfirmation').classList.remove('hidden');
+  $('keepDraft').focus();
+});
+$('keepDraft').addEventListener('click',()=>{
+  $('discardConfirmation').classList.add('hidden');
+  $('discardTrip').focus();
+});
+$('confirmDiscard').addEventListener('click',discardDraft);
+$('backToMain').addEventListener('click',discardDraft);
+
+function renderTrips(){
+  if(typeof disposeRideMaps==='function')disposeRideMaps();
+  const trips=getTrips();
+  const now=new Date(); const monthly=trips.filter(t=>{const d=new Date(t.startedAt); return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();});
+  $("monthKm").textContent=monthly.reduce((v,t)=>v+t.distanceKm,0).toLocaleString("cs-CZ",{maximumFractionDigits:3})+" km";
+  $("businessKm").textContent=monthly.filter(t=>t.type==="Služební").reduce((v,t)=>v+t.distanceKm,0).toLocaleString("cs-CZ",{maximumFractionDigits:3})+" km";
+  $("monthTrips").textContent=monthly.length;
+  if(!trips.length){
+    $('tripList').innerHTML='<div class="empty">Zatím žádné jízdy.</div>';
+    return;
+  }
+  $('tripList').innerHTML=trips.map((t,index)=>{
+    const d=new Date(t.startedAt);
+    const dur=fmtDuration(t.endedAt-t.startedAt);
+    return `<div class="trip">
+      <div class="trip-top">
+        <span>${d.toLocaleDateString('cs-CZ')} ${d.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'})}</span>
+        <span>${Number(t.distanceKm).toFixed(3)} km</span>
+      </div>
+      <div class="trip-meta">${t.from || t.to ? escapeHtml(t.from||"—")+" → "+escapeHtml(t.to||"—")+" · " : ""}${t.manual ? "Ruční záznam" : dur} · ${Number(t.odometerStart).toFixed(1)} → ${Number(t.odometerEnd).toFixed(1)} km</div>
+      <div class="pill">${escapeHtml(t.type)}</div>
+      ${t.note ? `<div class="trip-meta">${escapeHtml(t.note)}</div>` : ''}
+      ${rideMapMarkup(t,index)}
+    </div>`;
+  }).join('');
+  bindRideMaps($('tripList'),trips);
+}
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m]));
+}
+
+$('exportCsv').addEventListener('click',()=>{
+  const trips=getTrips();
+  if(!trips.length) return alert('Není co exportovat.');
+  const rows=[['Datum','Start','Konec','Km','Tachometr start','Tachometr konec','Typ','Odkud','Kam','Poznámka']];
+  for(const t of trips){
+    const s=new Date(t.startedAt), e=new Date(t.endedAt);
+    rows.push([
+      s.toLocaleDateString('cs-CZ'),
+      s.toLocaleTimeString('cs-CZ'),
+      e.toLocaleTimeString('cs-CZ'),
+      Number(t.distanceKm).toFixed(3),
+      Number(t.odometerStart).toFixed(1),
+      Number(t.odometerEnd).toFixed(1),
+      t.type,
+      t.from||'', t.to||'',
+      t.note||''
+    ]);
+  }
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(';')).join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='kniha-jizd.csv'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+
+function prepareFinish(){
+  if(typeof resetPhotoInputs==='function') resetPhotoInputs();
+  $('photoPanel').classList.toggle('hidden',!state.draft.manual);
+  $('backToMain').classList.toggle('hidden',!state.draft.manual);
+  $('finishTitle').textContent=state.draft.manual?'Zadat jízdu ručně':'Uložit jízdu';
+  $('discardConfirmation').classList.add('hidden');
+  $('tripNote').value='';
+  $('finishStatus').textContent=!state.draft.manual && state.draft.distanceKm===0?'GPS nezaznamenala použitelnou vzdálenost. Při chůzi v bytě může být pohyb příliš malý nebo poloha nepřesná. Kilometry můžeš doplnit ručně.':'';
+  const d=new Date(state.draft.startedAt); d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  $('tripDate').value=d.toISOString().slice(0,16);
+  $('correctedKm').value=state.draft.distanceKm.toFixed(3);
+  $('tripFrom').value=''; $('tripTo').value='';
+}
+$('manualTrip').addEventListener('click',()=>{
+  state.draft={manual:true,startedAt:Date.now(),endedAt:Date.now(),distanceKm:0,odometerStart:loadOdometer(),odometerEnd:loadOdometer()};
+  prepareFinish(); $('finalDistance').textContent='0'; $('finalOdometer').textContent=loadOdometer().toFixed(1);
+  $('idlePanel').classList.add('hidden'); $('finishPanel').classList.remove('hidden');
+});
+$('correctedKm').addEventListener('input',()=>{
+  const km=Number($('correctedKm').value);
+  $('finishStatus').textContent='';
+  $('finalDistance').textContent=Number.isFinite(km)?km.toFixed(3):'—';
+  $('finalOdometer').textContent=state.draft && Number.isFinite(km)?(state.draft.odometerStart+km).toFixed(1):'—';
+});
+$('todayLabel').textContent=new Date().toLocaleDateString('cs-CZ',{day:'numeric',month:'long',year:'numeric'});
+function restoreActiveTrip(){
+try {
+  const active=JSON.parse(localGet('activeTrip')||'null');
+  if(active){
+    state.draft={...active,endedAt:Date.now(),odometerStart:loadOdometer(),odometerEnd:loadOdometer()+active.distanceKm};
+    prepareFinish(); $('finalDistance').textContent=active.distanceKm.toFixed(3); $('finalOdometer').textContent=state.draft.odometerEnd.toFixed(1);
+    $('idlePanel').classList.add('hidden'); $('finishPanel').classList.remove('hidden');
+    $('finishPanel').querySelector('.section-title').textContent='Obnovená jízda · potvrď kilometry';
+  }
+}catch{}
+}
+try{if(window.self!==window.top) $('browserHint').classList.remove('hidden')}catch{}
+if(document.modelContext?.registerTool){
+  Promise.resolve(document.modelContext.registerTool({name:'read_trip_log',description:'Read saved trips and current odometer from this device.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:()=>({odometerKm:loadOdometer(),trips:getTrips()})})).catch(()=>{});
+}
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+initializeLog();
+</script>
+<script src="odometer-photo.js"></script>
+</body>
+</html>
