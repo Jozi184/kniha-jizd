@@ -49,6 +49,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
 .photo-panel{padding:16px;background:#1b2025;border:1px solid #404a58;border-radius:16px;margin:18px 0}.photo-panel>summary{color:var(--accent);font-size:16px;font-weight:600}.photo-grid{display:grid;grid-template-columns:1fr;gap:18px}.photo-slot{min-width:0;padding:15px;background:#292e35;border-radius:14px}.photo-slot h3{font-size:16px;margin:0 0 12px}.photo-actions{display:flex;gap:8px;flex-wrap:wrap}.photo-upload{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 12px;background:#3a4149;color:#f5f6f8;border-radius:10px;font-size:14px;flex:1;overflow:hidden}.photo-upload input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}.photo-upload:focus-within{outline:3px solid var(--accent);outline-offset:3px}.photo-preview{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin-top:12px;background:#17191d}.photo-check{display:flex;gap:10px;align-items:flex-start;font-size:14px;margin-top:12px}.photo-check input{width:22px;min-height:22px;flex:none;accent-color:var(--accent);margin-top:2px}@media(min-width:600px){.photo-grid{grid-template-columns:1fr 1fr}}
 .ride-map-details{margin-top:14px}.ride-map-details summary{color:var(--accent)}.ride-map{height:300px;width:100%;border-radius:14px;margin-top:10px;background:#e7e9e4;isolation:isolate}.ride-map-status{font-size:13px;color:var(--muted)}.ride-map .leaflet-control-zoom a{color:#17191d}.ride-map .leaflet-control-attribution{font-size:10px}.ride-map a{color:#215500}.mapy-brand{display:block;background:#fff;padding:4px;border-radius:5px}.mapy-brand img{display:block;height:30px;width:auto}
+.delete-ride{margin-top:12px;border-top:1px solid var(--line);padding-top:6px}.delete-ride summary{color:var(--danger);font-size:13px}.delete-ride p{margin:6px 0 12px}.delete-ride button{min-height:44px;font-size:14px;padding:10px}
 </style>
 <script src="route-map.js"></script>
 </head>
@@ -206,7 +207,10 @@ function localSet(key,value){try{localStorage.setItem(key,value)}catch{}}
 function localRemove(key){try{localStorage.removeItem(key)}catch{}}
 function loadOdometer(){return log.odometerKm;}
 function getTrips(){return log.trips;}
+let storageBusy=false;
 function savingControls(disabled){
+  storageBusy=disabled;
+  document.querySelectorAll('[data-confirm-delete], [data-cancel-delete]').forEach(button=>button.disabled=disabled);
   for(const id of ['saveOdometer','saveTrip','startTrip','manualTrip','discardTrip','backToMain','confirmDiscard']) $(id).disabled=disabled;
 }
 async function requestLog(method,body){
@@ -499,9 +503,18 @@ function renderTrips(){
       <div class="pill">${escapeHtml(t.type)}</div>
       ${t.note ? `<div class="trip-meta">${escapeHtml(t.note)}</div>` : ''}
       ${rideMapMarkup(t,index)}
+      <details class="delete-ride"><summary>Smazat jízdu</summary><p class="small">Opravdu smazat tuto jízdu? Stav tachometru zůstane stejný.</p><div class="row"><button class="secondary" type="button" data-cancel-delete="${index}">Zrušit</button><button class="danger" type="button" data-confirm-delete="${index}">Smazat jízdu</button></div></details>
     </div>`;
   }).join('');
   bindRideMaps($('tripList'),trips);
+  $('tripList').querySelectorAll('[data-cancel-delete]').forEach(button=>button.addEventListener('click',()=>{button.closest('details').open=false;}));
+  $('tripList').querySelectorAll('[data-confirm-delete]').forEach(button=>button.addEventListener('click',async()=>{
+    const index=Number(button.dataset.confirmDelete);
+    if(storageBusy || !storageReady || getTrips()!==trips)return;
+    if(state.startedAt || state.draft){$('storageStatus').textContent='Nejdřív ulož nebo zahoď rozepsanou jízdu, potom můžeš mazat historii.';return;}
+    const target=trips[index];if(!target)return;
+    if(await persistLog(loadOdometer(),trips.filter((_,i)=>i!==index)))$('storageStatus').textContent='Jízda smazána. Stav tachometru zůstává stejný.';
+  }));
 }
 function escapeHtml(s){
   return s.replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m]));
