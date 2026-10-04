@@ -63,7 +63,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     <div class="label">Aktuální tachometr</div>
     <div class="value"><span id="odometerValue">0</span> <span class="unit">km</span></div>
     <details><summary>Upravit stav</summary><div class="odo-form"><div class="field">
-      <label for="odometerInput" class="label">Nový stav tachometru</label><input id="odometerInput" type="number" inputmode="decimal" placeholder="Nastavit stav tachometru">
+      <label for="odometerInput" class="label">Nový stav tachometru</label><input id="odometerInput" type="text" inputmode="decimal" placeholder="Nastavit stav tachometru">
     </div>
     <button class="secondary" id="saveOdometer">Uložit tachometr</button></div></details>
   </div>
@@ -261,8 +261,13 @@ async function initializeLog(){
   }
 }
 
+function parseOdometer(value){
+  const normalized=value.trim().replace(/[\s\u00a0\u202f]/g,'').replace(',', '.');
+  return /^\d+(?:\.\d+)?$/.test(normalized)?Number(normalized):NaN;
+}
+function formatOdometer(value){return Number(value).toLocaleString('cs-CZ',{minimumFractionDigits:1,maximumFractionDigits:3});}
 function renderOdometer(){
-  $('odometerValue').textContent = loadOdometer().toFixed(1);
+  $('odometerValue').textContent = formatOdometer(loadOdometer());
 }
 function haversine(a,b){
   const R=6371;
@@ -389,7 +394,7 @@ $('retryGps').addEventListener('click',()=>{if(state.startedAt && !state.draft) 
 $('saveOdometer').addEventListener('click',async()=>{
   if(state.startedAt || state.draft) return alert("Tachometr změň až po uložení jízdy.");
   if(!$("odometerInput").value.trim()) return alert("Zadej stav tachometru.");
-  const v=Number($('odometerInput').value);
+  const v=parseOdometer($('odometerInput').value);
   if(!Number.isFinite(v) || v<0) return alert('Zadej platný stav tachometru.');
   if(await persistLog(v,getTrips())) $('odometerInput').value='';
 });
@@ -423,7 +428,7 @@ $('stopTrip').addEventListener('click',()=>{
   };
   prepareFinish();
   $('finalDistance').textContent=state.distanceKm.toFixed(3);
-  $('finalOdometer').textContent=state.draft.odometerEnd.toFixed(1);
+  $('finalOdometer').textContent=formatOdometer(state.draft.odometerEnd);
   $('activePanel').classList.add('hidden');
   $('finishPanel').classList.remove('hidden');
 });
@@ -499,7 +504,7 @@ function renderTrips(){
         <span>${d.toLocaleDateString('cs-CZ')} ${d.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'})}</span>
         <span>${Number(t.distanceKm).toFixed(3)} km</span>
       </div>
-      <div class="trip-meta">${t.from || t.to ? escapeHtml(t.from||"—")+" → "+escapeHtml(t.to||"—")+" · " : ""}${t.manual ? "Ruční záznam" : dur} · ${Number(t.odometerStart).toFixed(1)} → ${Number(t.odometerEnd).toFixed(1)} km</div>
+      <div class="trip-meta">${t.from || t.to ? escapeHtml(t.from||"—")+" → "+escapeHtml(t.to||"—")+" · " : ""}${t.manual ? "Ruční záznam" : dur} · ${formatOdometer(t.odometerStart)} → ${formatOdometer(t.odometerEnd)} km</div>
       <div class="pill">${escapeHtml(t.type)}</div>
       ${t.note ? `<div class="trip-meta">${escapeHtml(t.note)}</div>` : ''}
       ${rideMapMarkup(t,index)}
@@ -561,14 +566,14 @@ function prepareFinish(){
 }
 $('manualTrip').addEventListener('click',()=>{
   state.draft={manual:true,startedAt:Date.now(),endedAt:Date.now(),distanceKm:0,odometerStart:loadOdometer(),odometerEnd:loadOdometer()};
-  prepareFinish(); $('finalDistance').textContent='0'; $('finalOdometer').textContent=loadOdometer().toFixed(1);
+  prepareFinish(); $('finalDistance').textContent='0'; $('finalOdometer').textContent=formatOdometer(loadOdometer());
   $('idlePanel').classList.add('hidden'); $('finishPanel').classList.remove('hidden');
 });
 $('correctedKm').addEventListener('input',()=>{
   const km=Number($('correctedKm').value);
   $('finishStatus').textContent='';
   $('finalDistance').textContent=Number.isFinite(km)?km.toFixed(3):'—';
-  $('finalOdometer').textContent=state.draft && Number.isFinite(km)?(state.draft.odometerStart+km).toFixed(1):'—';
+  $('finalOdometer').textContent=state.draft && Number.isFinite(km)?formatOdometer(state.draft.odometerStart+km):'—';
 });
 $('todayLabel').textContent=new Date().toLocaleDateString('cs-CZ',{day:'numeric',month:'long',year:'numeric'});
 function restoreActiveTrip(){
@@ -576,7 +581,7 @@ try {
   const active=JSON.parse(localGet('activeTrip')||'null');
   if(active){
     state.draft={...active,endedAt:Date.now(),odometerStart:loadOdometer(),odometerEnd:loadOdometer()+active.distanceKm};
-    prepareFinish(); $('finalDistance').textContent=active.distanceKm.toFixed(3); $('finalOdometer').textContent=state.draft.odometerEnd.toFixed(1);
+    prepareFinish(); $('finalDistance').textContent=active.distanceKm.toFixed(3); $('finalOdometer').textContent=formatOdometer(state.draft.odometerEnd);
     $('idlePanel').classList.add('hidden'); $('finishPanel').classList.remove('hidden');
     $('finishPanel').querySelector('.section-title').textContent='Obnovená jízda · potvrď kilometry';
   }
