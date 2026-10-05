@@ -44,7 +44,7 @@ struct PauseRideIntent: LiveActivityIntent {
     static var supportedModes: IntentModes { .background }
 
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
-        try RideIntentExecutor.pause()
+        try await RideIntentExecutor.pause()
         return .result(dialog: "Jízda je pozastavená.")
     }
 }
@@ -59,13 +59,13 @@ struct ResumeRideIntent: LiveActivityIntent {
     static var supportedModes: IntentModes { .background }
 
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
-        try RideIntentExecutor.resume()
+        try await RideIntentExecutor.resume()
         return .result(dialog: "GPS jízda pokračuje.")
     }
 }
 
 private enum RideIntentExecutor {
-    @MainActor static func pause() throws {
+    @MainActor static func pause() async throws {
         #if WIDGET_EXTENSION
         throw IntentError.appRequired
         #else
@@ -73,9 +73,10 @@ private enum RideIntentExecutor {
         guard let ride = recorder.ride, ride.endedAt == nil else { throw IntentError.noActiveRide }
         recorder.pause()
         guard recorder.ride?.pause?.isPaused == true else { throw RideActionError.unavailable(recorder.message) }
+        await recorder.waitForLiveUpdate()
         #endif
     }
-    @MainActor static func resume() throws {
+    @MainActor static func resume() async throws {
         #if WIDGET_EXTENSION
         throw IntentError.appRequired
         #else
@@ -83,6 +84,7 @@ private enum RideIntentExecutor {
         guard let ride = recorder.ride, ride.endedAt == nil else { throw IntentError.noActiveRide }
         if ride.pause?.isPaused != true { return }
         try recorder.resumeFromSystem()
+        await recorder.waitForLiveUpdate()
         #endif
     }
     @MainActor static func start() throws -> Bool {

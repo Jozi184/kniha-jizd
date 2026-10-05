@@ -212,6 +212,7 @@ enum RideActionError: LocalizedError {
             live.update(current, message: message, force: true)
         } catch { message = "Pauzu se nepodařilo uložit. Jízda dál probíhá; zkus pauzu znovu." }
     }
+    func waitForLiveUpdate() async { await live.waitForUpdate() }
     func resumeFromSystem() throws {
         guard let current = ride, current.pause?.isPaused == true else { return }
         guard let account, account.userId == current.userId else {

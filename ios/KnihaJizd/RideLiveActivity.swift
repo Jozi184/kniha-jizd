@@ -4,6 +4,7 @@ import Foundation
 @MainActor final class RideLiveActivity {
     private var activity: Activity<RideActivityAttributes>?
     private var lastUpdate = Date.distantPast
+    private var updateTask: Task<Void, Never>?
     var enabled: Bool {
         if #available(iOS 16.2, *) { return ActivityAuthorizationInfo().areActivitiesEnabled }
         return false
@@ -30,13 +31,16 @@ import Foundation
         guard #available(iOS 16.2, *), let activity, (force || Date().timeIntervalSince(lastUpdate) >= 5) else { return }
         lastUpdate = Date()
         let content = ActivityContent(state: RideActivityAttributes.ContentState(distanceKm: ride.distanceKm, message: message, ended: false, pausedAt: ride.pause?.pausedAtMs.map { Date(timeIntervalSince1970: $0 / 1000) }, pausedMilliseconds: ride.pause?.accumulatedMs), staleDate: ride.pause?.isPaused == true ? nil : Date().addingTimeInterval(60))
-        Task { await activity.update(content) }
+        let previous = updateTask
+        updateTask = Task { await previous?.value; await activity.update(content) }
     }
+    func waitForUpdate() async { await updateTask?.value }
     func finish(_ ride: Ride) {
         guard #available(iOS 16.2, *), let activity else { return }
         self.activity = nil
         let content = ActivityContent(state: RideActivityAttributes.ContentState(distanceKm: ride.distanceKm, message: "Čeká na kontrolu v aplikaci", ended: true), staleDate: nil)
-        Task { await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(30))) }
+        let previous = updateTask
+        updateTask = Task { await previous?.value; await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(30))) }
     }
     func finishOrphans() {
         guard #available(iOS 16.2, *) else { return }
