@@ -201,14 +201,16 @@
     intercept('exportCsv', () => {
       const trips = getTrips();
       if (!trips.length) return alert('Není co exportovat.');
-      const rows = [['Datum','Start','Konec','Km','Tachometr start','Tachometr konec','Typ','Odkud','Kam','Poznámka']];
+      const rows = [['Datum','Start','Konec','Km','Tachometr start','Tachometr konec','Typ','Odkud','Kam','Poznámka','Tachometr v autě na konci','Naměřeno GPS (km)']];
       for (const trip of trips) {
         const start = new Date(trip.startedAt), end = new Date(trip.endedAt);
         rows.push([start.toLocaleDateString('cs-CZ'), start.toLocaleTimeString('cs-CZ'), end.toLocaleTimeString('cs-CZ'),
           Number(trip.distanceKm).toFixed(3), Number(trip.odometerStart).toFixed(1), Number(trip.odometerEnd).toFixed(1),
-          trip.type, trip.from || '', trip.to || '', trip.note || '']);
+          trip.type, trip.from || '', trip.to || '', trip.note || '', Number.isFinite(trip.carOdometerEnd) ? trip.carOdometerEnd.toFixed(3) : '',
+          Number.isFinite(trip.gpsDistanceKm) ? trip.gpsDistanceKm.toFixed(3) : '']);
       }
-      const csv = '\ufeff' + rows.map(row => row.map(value => '"' + String(value).replaceAll('"','""') + '"').join(';')).join('\n');
+      const exportRows = typeof tripCsvRows === 'function' ? tripCsvRows(trips) : rows;
+      const csv = '\ufeff' + exportRows.map(row => row.map(value => '"' + String(value).replaceAll('"','""') + '"').join(';')).join('\n');
       send({action: 'export', csv});
     });
     watchGps = () => send({action: 'retry'});

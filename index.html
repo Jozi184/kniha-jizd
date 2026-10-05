@@ -145,7 +145,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
         <div><strong><span id="finalDistance">0</span> km</strong></div>
       </div>
       <div>
-        <div class="label">Tachometr po jízdě</div>
+        <div class="label">Vypočtený tachometr po jízdě</div>
         <div><strong><span id="finalOdometer">0</span> km</strong></div>
       </div>
     </div>
@@ -177,6 +177,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
       <p class="small">Fotky se zpracují v telefonu a neukládají se do historie. Při prvním čtení je potřeba internet pro načtení rozpoznávání.</p>
     </details>
     <div class="field"><label for="tripDate" class="label">Datum a čas začátku</label><input id="tripDate" type="datetime-local"></div><div id="placeLookupInfo" class="status hidden"><span id="placeLookupStatus" role="status" aria-live="polite"></span><div style="margin-top:6px"><a href="https://mapy.com/" target="_blank" rel="noopener"><img src="mapy-logo.svg" alt="Mapy.com" height="20" style="vertical-align:middle;width:auto"></a></div></div><div class="grid"><div class="field"><label for="tripFrom" class="label">Odkud</label><input id="tripFrom" placeholder="Např. Praha"></div><div class="field"><label for="tripTo" class="label">Kam</label><input id="tripTo" placeholder="Např. Brno"></div></div><div class="field"><label for="correctedKm" class="label">Skutečně ujeto (km)</label><input id="correctedKm" type="number" min="0" step="0.001" inputmode="decimal"><div class="small">Vzdálenost z GPS je předvyplněná. Pokud potřebuješ, uprav ji podle tachometru auta. 0,001 km = 1 metr.</div></div><div class="field">
+      <label for="carOdometerEnd" class="label">Konečný stav tachometru v autě (km)</label>
+      <input id="carOdometerEnd" type="text" inputmode="decimal" placeholder="Např. 125 430,2" aria-describedby="carOdometerHint">
+      <div id="carOdometerHint" class="small"></div>
+    </div><div class="field">
       <label for="tripType" class="label">Typ jízdy</label>
       <select id="tripType">
         <option value="Soukromá">Soukromá</option>
@@ -458,6 +462,14 @@ $('saveTrip').addEventListener('click',async()=>{
   const km=Number($('correctedKm').value);
   const start=new Date($('tripDate').value).getTime();
   if(!$('correctedKm').value || !Number.isFinite(km) || km<=0 || !Number.isFinite(start)) return alert('Vyplň platné datum a vzdálenost větší než nula.');
+  const reading=$('carOdometerEnd').value.trim();
+  const carOdometerEnd=parseOdometer(reading);
+  if((!reading && $('tripType').value==='Služební') || (reading && (!Number.isFinite(carOdometerEnd) || carOdometerEnd<0))){
+    $('finishStatus').textContent=reading?'Zadej platný konečný stav tachometru v autě. Můžeš použít čárku i tečku.':'U služební jízdy doplň konečný stav tachometru z auta.';
+    $('carOdometerEnd').focus();return;
+  }
+  if(reading)state.draft.carOdometerEnd=carOdometerEnd;
+  else delete state.draft.carOdometerEnd;
   state.draft.distanceKm=km;
   state.draft.odometerEnd=state.draft.odometerStart+km;
   if(state.draft.manual) state.draft.endedAt=start;
@@ -524,6 +536,8 @@ function renderTrips(){
         <span>${Number(t.distanceKm).toFixed(3)} km</span>
       </div>
       <div class="trip-meta">${t.from || t.to ? escapeHtml(t.from||"—")+" → "+escapeHtml(t.to||"—")+" · " : ""}${t.manual ? "Ruční záznam" : dur} · ${formatOdometer(t.odometerStart)} → ${formatOdometer(t.odometerEnd)} km</div>
+      ${Number.isFinite(t.carOdometerEnd)?`<div class="trip-meta">Tachometr v autě na konci: ${formatOdometer(t.carOdometerEnd)} km</div>`:''}
+      ${Number.isFinite(t.gpsDistanceKm)?`<div class="trip-meta">Naměřeno GPS: ${t.gpsDistanceKm.toLocaleString('cs-CZ',{maximumFractionDigits:3})} km</div>`:''}
       <div class="pill">${escapeHtml(t.type)}</div>
       ${t.note ? `<div class="trip-meta">${escapeHtml(t.note)}</div>` : ''}
       ${t.placesSource==='Mapy.com'?'<div class="trip-meta"><a href="https://mapy.com/" target="_blank" rel="noopener"><img src="mapy-logo.svg" alt="Místa podle Mapy.com" height="14" style="width:auto;vertical-align:middle"></a></div>':''}
@@ -545,10 +559,8 @@ function escapeHtml(s){
   return s.replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m]));
 }
 
-$('exportCsv').addEventListener('click',()=>{
-  const trips=getTrips();
-  if(!trips.length) return alert('Není co exportovat.');
-  const rows=[['Datum','Start','Konec','Km','Tachometr start','Tachometr konec','Typ','Odkud','Kam','Poznámka']];
+function tripCsvRows(trips){
+  const rows=[['Datum','Start','Konec','Km','Tachometr start','Tachometr konec','Typ','Odkud','Kam','Poznámka','Tachometr v autě na konci','Naměřeno GPS (km)']];
   for(const t of trips){
     const s=new Date(t.startedAt), e=new Date(t.endedAt);
     rows.push([
@@ -560,9 +572,18 @@ $('exportCsv').addEventListener('click',()=>{
       Number(t.odometerEnd).toFixed(1),
       t.type,
       t.from||'', t.to||'',
-      t.note||''
+      t.note||'',
+      Number.isFinite(t.carOdometerEnd)?t.carOdometerEnd.toFixed(3):'',
+      Number.isFinite(t.gpsDistanceKm)?t.gpsDistanceKm.toFixed(3):''
     ]);
   }
+  return rows;
+}
+
+$('exportCsv').addEventListener('click',()=>{
+  const trips=getTrips();
+  if(!trips.length) return alert('Není co exportovat.');
+  const rows=tripCsvRows(trips);
   const csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(';')).join('\n');
   const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
@@ -571,7 +592,17 @@ $('exportCsv').addEventListener('click',()=>{
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
 
+function updateCarOdometerHint(){
+  const required=$('tripType').value==='Služební';
+  $('carOdometerEnd').required=required;
+  $('carOdometerHint').textContent=required?'Povinné pro služební jízdu. Zadej stav, který právě ukazuje auto.':'Zadej stav, který právě ukazuje auto. U soukromé jízdy je údaj volitelný.';
+}
+$('tripType').addEventListener('change',updateCarOdometerHint);
+
 function prepareFinish(){
+  if(!state.draft.manual && !Number.isFinite(state.draft.gpsDistanceKm))state.draft.gpsDistanceKm=state.draft.distanceKm;
+  $('carOdometerEnd').value=Number.isFinite(state.draft.carOdometerEnd)?String(state.draft.carOdometerEnd).replace('.',','):'';
+  updateCarOdometerHint();
   if(typeof resetPhotoInputs==='function') resetPhotoInputs();
   $('photoPanel').classList.toggle('hidden',!state.draft.manual);
   $('backToMain').classList.toggle('hidden',!state.draft.manual);

@@ -99,6 +99,7 @@ $('applyPhotoDistance').addEventListener('click',()=>{
   const distance=Math.round((end-start)*1000)/1000;
   if(distance<=0){$('photoDifference').textContent='Rozdíl musí být alespoň 0,001 km.';return;}
   state.draft.odometerStart=start;state.draft.odometerEnd=end;state.draft.distanceKm=distance;state.draft.photoDirty=false;
+  state.draft.carOdometerEnd=end;$('carOdometerEnd').value=String(end).replace('.',',');
   $('correctedKm').value=distance.toFixed(3);$('finalDistance').textContent=distance.toFixed(3);$('finalOdometer').textContent=formatOdometer(end);
   $('photoDifference').textContent='Použito: '+start.toLocaleString('cs-CZ')+' → '+end.toLocaleString('cs-CZ')+' km. Ujeto '+distance.toLocaleString('cs-CZ',{maximumFractionDigits:3})+' km. Nyní můžeš uložit jízdu.';
 });
