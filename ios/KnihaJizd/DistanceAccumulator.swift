@@ -9,6 +9,10 @@ struct DistanceAccumulator {
         var appendPoint: Bool
         var startsSegment: Bool
     }
+    static func belongsToRide(_ timestamp: Date, startedAtMs: Double, now: Date = Date()) -> Bool {
+        let milliseconds = timestamp.timeIntervalSince1970 * 1000
+        return milliseconds.isFinite && milliseconds >= startedAtMs && timestamp <= now.addingTimeInterval(5)
+    }
     private var previous: CLLocation?
     private var anchor: CLLocation?
 

@@ -37,4 +37,10 @@ check(filter.consume(point(1400, 36)) == nil, "Impossible speed spikes must be r
 let afterSpike = filter.consume(point(1110, 37))!
 check(afterSpike.metres == 0 && afterSpike.startsSegment, "A rejected spike must not create a counted return jump")
 check(filter.consume(point(1120, 38))!.metres > 9, "Normal driving resumes after the spike")
-print("Passed: slow movement, old anchors with fresh samples, normal driving, stationary jitter, gaps, resets, timestamps and GPS spikes")
+let now = Date(timeIntervalSince1970: 300)
+check(DistanceAccumulator.belongsToRide(point(0, 110).timestamp, startedAtMs: 100_000, now: now), "Delayed GPS fixes from this ride must be retained")
+check(!DistanceAccumulator.belongsToRide(point(0, 99).timestamp, startedAtMs: 100_000, now: now), "Cached fixes before the ride must be rejected")
+check(!DistanceAccumulator.belongsToRide(point(0, 306).timestamp, startedAtMs: 100_000, now: now), "Future timestamps must be rejected")
+let delayedBatch = (0...100).map { point(Double($0) * 2, 110 + Double($0)) }.filter { DistanceAccumulator.belongsToRide($0.timestamp, startedAtMs: 100_000, now: now) }
+check(total(delayedBatch) > expectedSlow - 3.01, "A delayed batch must retain its measured distance without extrapolation")
+print("Passed: delayed batches and ride timestamp bounds,  slow movement, old anchors with fresh samples, normal driving, stationary jitter, gaps, resets, timestamps and GPS spikes")

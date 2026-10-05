@@ -244,14 +244,15 @@ enum RideActionError: LocalizedError {
         }
         guard ride != nil, ride?.endedAt == nil, !storageFailed else { return }
         for point in locations.sorted(by: { $0.timestamp < $1.timestamp }) {
+            // iOS may deliver a batch late. Keep its valid points from this ride;
+            // reject pre-start cached fixes instead of dropping all fixes >30s old.
+            guard let startedAt = ride?.startedAt,
+                  DistanceAccumulator.belongsToRide(point.timestamp, startedAtMs: startedAt) else { continue }
             guard point.horizontalAccuracy >= 0 else {
                 distance.reset(); speedKmh = nil; message = "GPS zatím nemá použitelnou polohu."; continue
             }
             accuracyMetres = point.horizontalAccuracy
             lastLocationAtMs = point.timestamp.timeIntervalSince1970 * 1000
-            guard abs(point.timestamp.timeIntervalSinceNow) < 30 else {
-                distance.reset(); speedKmh = nil; message = "Čekám na novou GPS polohu…"; continue
-            }
             guard point.horizontalAccuracy <= 60 else {
                 distance.reset(); speedKmh = nil
                 message = manager.accuracyAuthorization == .reducedAccuracy
@@ -278,8 +279,9 @@ enum RideActionError: LocalizedError {
                     ride?.route = reduced
                 }
             }
-            speedKmh = point.speed.isFinite && point.speed >= 0 && point.speedAccuracy >= 0 ? point.speed * 3.6 : nil
-            message = manager.accuracyAuthorization == .reducedAccuracy ? "Zapni Přesnou polohu pro lepší měření." : "GPS zaznamenává jízdu"
+            let fresh = abs(point.timestamp.timeIntervalSinceNow) < 30
+            speedKmh = fresh && point.speed.isFinite && point.speed >= 0 && point.speedAccuracy >= 0 ? point.speed * 3.6 : nil
+            message = manager.accuracyAuthorization == .reducedAccuracy ? "Zapni Přesnou polohu pro lepší měření." : (fresh ? "GPS zaznamenává jízdu" : "Zpracovávám odložené GPS polohy…")
             persist()
             if let ride { live.update(ride, message: message) }
         }
