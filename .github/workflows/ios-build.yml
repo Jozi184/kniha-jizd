@@ -20,6 +20,10 @@ jobs:
         run: |
           node ios/Tests/native-bridge.cjs
           node tests/accounts.cjs
+      - name: GPS distance regression checks
+        run: |
+          swiftc ios/KnihaJizd/DistanceAccumulator.swift ios/Tests/main.swift -o "$RUNNER_TEMP/distance-tests"
+          "$RUNNER_TEMP/distance-tests"
       - name: Build app and widgets without signing
         run: |
           xcodebuild -version

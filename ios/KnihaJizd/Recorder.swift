@@ -42,8 +42,7 @@ enum RideActionError: LocalizedError {
     @Published var lastLocationAtMs: Double?
     @Published var message = "Připraveno k jízdě"
     private let manager = CLLocationManager()
-    private var last: CLLocation?
-    private var gap = true
+    private var distance = DistanceAccumulator()
     private var pendingStart = false
     private var pendingOdometer = 0.0
     private var pendingUserId: String?
@@ -162,7 +161,7 @@ enum RideActionError: LocalizedError {
             throw error
         }
         accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil
-        ride = started; last = nil; gap = true
+        ride = started; distance.reset()
         message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
         return true
     }
@@ -183,7 +182,7 @@ enum RideActionError: LocalizedError {
             requestingAlways = false; manager.requestAlwaysAuthorization()
         } else if backgroundReady { requestingAlways = false }
         if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
-            pendingStart = false; pendingProbe = false; speedKmh = nil; last = nil; gap = true; message = "Povol polohu aplikaci a zapni polohové služby v Nastavení → Soukromí → Polohové služby."
+            pendingStart = false; pendingProbe = false; speedKmh = nil; distance.reset(); message = "Povol polohu aplikaci a zapni polohové služby v Nastavení → Soukromí → Polohové služby."
         }
         if pendingProbe && [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) {
             manager.requestLocation()
@@ -194,14 +193,14 @@ enum RideActionError: LocalizedError {
     }
     func retry() {
         guard ride != nil, ride?.endedAt == nil, !storageFailed else { return }
-        manager.stopUpdatingLocation(); last = nil; gap = true
+        manager.stopUpdatingLocation(); distance.reset()
         accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil
         manager.startUpdatingLocation(); message = "Hledám přesnou GPS polohu…"
     }
     @discardableResult func stop() -> Bool {
         pendingStart = false
         guard var completed = ride else { return true }
-        manager.stopUpdatingLocation(); last = nil; speedKmh = nil
+        manager.stopUpdatingLocation(); distance.reset(); speedKmh = nil
         completed.endedAt = Date().timeIntervalSince1970 * 1000
         var queued = pendingRides; queued.append(completed)
         do {
@@ -246,30 +245,26 @@ enum RideActionError: LocalizedError {
         guard ride != nil, ride?.endedAt == nil, !storageFailed else { return }
         for point in locations.sorted(by: { $0.timestamp < $1.timestamp }) {
             guard point.horizontalAccuracy >= 0 else {
-                gap = true; speedKmh = nil; message = "GPS zatím nemá použitelnou polohu."; continue
+                distance.reset(); speedKmh = nil; message = "GPS zatím nemá použitelnou polohu."; continue
             }
             accuracyMetres = point.horizontalAccuracy
             lastLocationAtMs = point.timestamp.timeIntervalSince1970 * 1000
             guard abs(point.timestamp.timeIntervalSinceNow) < 30 else {
-                gap = true; speedKmh = nil; message = "Čekám na novou GPS polohu…"; continue
+                distance.reset(); speedKmh = nil; message = "Čekám na novou GPS polohu…"; continue
             }
             guard point.horizontalAccuracy <= 60 else {
-                gap = true; speedKmh = nil
+                distance.reset(); speedKmh = nil
                 message = manager.accuracyAuthorization == .reducedAccuracy
                     ? "Zapni Přesnou polohu pro lepší měření."
                     : "Slabá GPS: přesnost přibližně ±\(Int(point.horizontalAccuracy)) m. Vzdálenost zatím nepřičítám."
                 continue
             }
-            var count = false
-            if let previous = last {
-                let dt = point.timestamp.timeIntervalSince(previous.timestamp)
-                guard dt > 0 else { continue }
-                let metres = point.distance(from: previous)
-                if dt > 30 { gap = true }
-                else if metres >= 3 && metres / dt * 3.6 < 220 { ride?.distanceKm += metres / 1000; count = true }
+            guard let sample = distance.consume(point) else {
+                speedKmh = nil; message = "GPS bod přeskočen: neplatný čas nebo nepřesný skok polohy."; continue
             }
-            if last == nil || count || gap {
-                ride?.route.append([point.coordinate.latitude, point.coordinate.longitude, gap ? 1 : 0])
+            ride?.distanceKm += sample.metres / 1000
+            if sample.appendPoint {
+                ride?.route.append([point.coordinate.latitude, point.coordinate.longitude, sample.startsSegment ? 1 : 0])
                 if let route = ride?.route, route.count > 1024 {
                     // Preserve discontinuities when compacting the route.
                     var reduced: [[Double]] = [route[0]]
@@ -282,16 +277,14 @@ enum RideActionError: LocalizedError {
                     if route.count % 2 == 0 { reduced.append(route.last!) }
                     ride?.route = reduced
                 }
-                gap = false
             }
             speedKmh = point.speed.isFinite && point.speed >= 0 && point.speedAccuracy >= 0 ? point.speed * 3.6 : nil
-            last = point
             message = manager.accuracyAuthorization == .reducedAccuracy ? "Zapni Přesnou polohu pro lepší měření." : "GPS zaznamenává jízdu"
             persist()
             if let ride { live.update(ride, message: message) }
         }
     }
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        pendingProbe = false; gap = true; last = nil; speedKmh = nil; message = "GPS: \(error.localizedDescription)"
+        pendingProbe = false; distance.reset(); speedKmh = nil; message = "GPS: \(error.localizedDescription)"
     }
 }

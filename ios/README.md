@@ -30,7 +30,7 @@ V Xcode použij Integrate → Pull (ve starších verzích Source Control → Pu
 Nativní most předává přesnost polohy a čas poslední přijaté polohy. Slabý signál a výpadek nových poloh se zobrazí ve stavu GPS. Rychlost z Core Location se převádí z m/s na km/h; nedostupná rychlost nebo poloha starší než 30 sekund se zobrazuje jako pomlčka. Skutečná naměřená nula zůstává nulou.
 
 
-Location updates je jediný potřebný Background Mode. Core Location přijímá polohy s přesností do 60 m, ignoruje kroky pod 3 m a rychlost nad 220 km/h. Mezery delší než 30 s nespojuje do naměřené vzdálenosti. Po ukončení procesu převede zachráněnou rozpracovanou jízdu do fronty ke kontrole; chybějící pohyb nedopočítává.
+Location updates je jediný potřebný Background Mode. Core Location přijímá polohy s přesností do 60 m, skládá drobné posuny až do vzdálenosti alespoň 3 m od posledního započteného bodu a odmítá skoky odpovídající rychlosti 220 km/h nebo vyšší. Mezery delší než 30 s nespojuje do naměřené vzdálenosti. Po ukončení procesu převede zachráněnou rozpracovanou jízdu do fronty ke kontrole; chybějící pohyb nedopočítává.
 
 Bezplatný Personal Team vyžaduje pravidelné obnovení instalace přes Xcode. Po násilném ukončení aplikace uživatelem nebo restartu telefonu iOS nezaručuje pokračování záznamu. Testuj zamčení, návrat do aplikace, výpadek sítě, oprávnění, uložení a zahození. Aplikaci při řízení neovládej.
 
@@ -60,3 +60,7 @@ Fronta čekajících jízd je pouze v telefonu. Na PC se synchronizuje schválen
 Ve Zkratkách jsou akce **Zahájit GPS jízdu** a **Ukončit GPS jízdu**. Lze je vybrat v osobní automatizaci pro Bluetooth/CarPlay, kterou si nastavíš na iPhonu. Tato verze sama nerozpoznává pohyb auta ani konkrétní Bluetooth zařízení. Reálný test musí ověřit také zahájení po delší nečinnosti a zamčení; úspěšné sestavení samo nepotvrzuje chování iOS na pozadí.
 
 Používá se lokální ActivityKit bez APNs, App Groups nebo nových placených služeb. Běžné omezení sedmidenního podpisu Personal Team zůstává. Nezapínej další Background Modes.
+
+## Přesnost vzdálenosti (build 7)
+
+Filtr již nezahazuje jednotlivé posuny kratší než 3 m: ponechává poslední započtený bod jako kotvu a započte souhrnný posun po dosažení prahu. Čas posledního vzorku sleduje zvlášť, aby souvislé pomalé popojíždění nebylo považováno za výpadek. Slabá nebo stará poloha, výpadek delší než 30 s a nemožný rychlostní skok přeruší úsek. Chybějící vzdálenost se nedopočítává. Swift regresní testy na macOS ověřují pomalý pohyb, běžnou jízdu, zastavení, výpadky, starší body a odmítnutí skoků. Výsledek GPS se může dále lišit od tachometru; není použit plošný korekční koeficient.
