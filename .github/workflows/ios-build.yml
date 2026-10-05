@@ -41,9 +41,9 @@ jobs:
           for bundle in ['KnihaJizd.app', 'RideWidgets.appex']:
               metadata = products / bundle / 'Metadata.appintents'
               payload = b''.join(p.read_bytes() for p in metadata.rglob('*') if p.is_file())
-              for name in [b'StartRideIntent', b'StopRideIntent']:
+              for name in [b'StartRideIntent', b'StopRideIntent', b'PauseRideIntent', b'ResumeRideIntent']:
                   assert name in payload, (bundle, name, 'Missing intent metadata')
-              print(bundle, 'contains both ride actions')
+              print(bundle, 'contains start, stop, pause and resume actions')
           PYTHON
       - name: Build log
         if: always()

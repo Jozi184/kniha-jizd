@@ -34,7 +34,57 @@ struct StopRideIntent: LiveActivityIntent {
     }
 }
 
+@available(iOS 17.0, *)
+struct PauseRideIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Pozastavit GPS jízdu"
+    static var description = IntentDescription("Pozastaví GPS i dobu jízdy. Záznam zůstane rozepsaný.")
+    static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .background }
+
+    @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
+        try RideIntentExecutor.pause()
+        return .result(dialog: "Jízda je pozastavená.")
+    }
+}
+
+@available(iOS 17.0, *)
+struct ResumeRideIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Pokračovat v GPS jízdě"
+    static var description = IntentDescription("Pokračuje v téže jízdě bez přičtení pohybu během pauzy.")
+    static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .background }
+
+    @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
+        try RideIntentExecutor.resume()
+        return .result(dialog: "GPS jízda pokračuje.")
+    }
+}
+
 private enum RideIntentExecutor {
+    @MainActor static func pause() throws {
+        #if WIDGET_EXTENSION
+        throw IntentError.appRequired
+        #else
+        let recorder = Recorder.shared
+        guard let ride = recorder.ride, ride.endedAt == nil else { throw IntentError.noActiveRide }
+        recorder.pause()
+        guard recorder.ride?.pause?.isPaused == true else { throw RideActionError.unavailable(recorder.message) }
+        #endif
+    }
+    @MainActor static func resume() throws {
+        #if WIDGET_EXTENSION
+        throw IntentError.appRequired
+        #else
+        let recorder = Recorder.shared
+        guard let ride = recorder.ride, ride.endedAt == nil else { throw IntentError.noActiveRide }
+        if ride.pause?.isPaused != true { return }
+        try recorder.resumeFromSystem()
+        #endif
+    }
     @MainActor static func start() throws -> Bool {
         #if WIDGET_EXTENSION
         throw IntentError.appRequired
@@ -52,10 +102,11 @@ private enum RideIntentExecutor {
 }
 
 private enum IntentError: Error, CustomLocalizedStringResourceConvertible {
-    case appRequired, saveFailed
+    case appRequired, saveFailed, noActiveRide
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .appRequired: return "Akci se nepodařilo předat aplikaci. Otevři Knihu jízd a zkus to znovu."
+        case .noActiveRide: return "Žádná jízda neprobíhá. Nejprve zahaj jízdu."
         case .saveFailed: return "Jízdu se nepodařilo uložit. Otevři aplikaci a zkus ukončení znovu."
         }
     }

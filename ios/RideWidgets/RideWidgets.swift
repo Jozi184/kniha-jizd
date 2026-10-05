@@ -44,8 +44,7 @@ struct RideLiveWidget: Widget {
                     Text("Čekám na aktualizaci GPS…").font(.caption)
                 } else { Text(context.state.message).font(.caption).lineLimit(2) }
                 if !context.state.ended {
-                    Button(intent: StopRideIntent()) { Label("Ukončit jízdu", systemImage: "stop.fill") }
-                        .buttonStyle(.borderedProminent).tint(lime).foregroundStyle(.black)
+                    RideActivityButtons(paused: context.state.pausedAt != nil)
                 }
             }
             .padding(16)
@@ -61,13 +60,31 @@ struct RideLiveWidget: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     if context.state.ended { Text("Čeká na kontrolu") }
                     else {
-                        Button(intent: StopRideIntent()) { Label("Ukončit jízdu", systemImage: "stop.fill") }.tint(lime)
+                        RideActivityButtons(paused: context.state.pausedAt != nil)
                     }
                 }
             } compactLeading: { Image(systemName: "car.fill").foregroundStyle(lime) }
             compactTrailing: { Text(context.state.distanceKm, format: .number.precision(.fractionLength(1))).monospacedDigit() }
             minimal: { Image(systemName: "car.fill").foregroundStyle(lime) }
         }
+    }
+}
+
+private struct RideActivityButtons: View {
+    let paused: Bool
+    var body: some View {
+        HStack(spacing: 12) {
+            if paused {
+                Button(intent: ResumeRideIntent()) { Label("Pokračovat", systemImage: "play.fill") }
+                    .buttonStyle(.borderedProminent).tint(lime).foregroundStyle(.black)
+            } else {
+                Button(intent: PauseRideIntent()) { Label("Pauza", systemImage: "pause.fill") }
+                    .buttonStyle(.bordered).tint(lime)
+            }
+            Button(intent: StopRideIntent()) { Label("Ukončit", systemImage: "stop.fill") }
+                .buttonStyle(.bordered).tint(.white)
+        }
+        .font(.subheadline)
     }
 }
 

@@ -212,6 +212,18 @@ enum RideActionError: LocalizedError {
             live.update(current, message: message, force: true)
         } catch { message = "Pauzu se nepodařilo uložit. Jízda dál probíhá; zkus pauzu znovu." }
     }
+    func resumeFromSystem() throws {
+        guard let current = ride, current.pause?.isPaused == true else { return }
+        guard let account, account.userId == current.userId else {
+            throw RideActionError.unavailable("Otevři Knihu jízd a přihlas se k účtu této jízdy.")
+        }
+        guard backgroundReady else {
+            throw RideActionError.unavailable("Pro pokračování ze zamčené obrazovky povol polohu Vždy v Nastavení → Kniha jízd → Poloha.")
+        }
+        guard live.enabled else { throw RideActionError.unavailable("V Nastavení → Kniha jízd povol Živé aktivity.") }
+        resume()
+        guard ride?.pause?.isPaused == false else { throw RideActionError.unavailable(message) }
+    }
     func resume() {
         guard var current = ride, var clock = current.pause, clock.isPaused, current.endedAt == nil, !storageFailed else { return }
         guard [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) else {
