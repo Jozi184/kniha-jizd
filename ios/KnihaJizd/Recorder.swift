@@ -6,6 +6,7 @@ struct Ride: Codable, Identifiable {
     var id = UUID().uuidString
     var startedAt = Date().timeIntervalSince1970 * 1000
     var endedAt: Double?
+    var pause: RidePauseClock?
     var distanceKm = 0.0
     var route: [[Double]] = []
     var odometerStart: Double?
@@ -72,9 +73,15 @@ enum RideActionError: LocalizedError {
                 // A process termination creates a gap we cannot measure. Preserve the
                 // last recorded segment for review instead of silently resuming it.
                 if var interrupted = archive.active {
-                    interrupted.endedAt = Date().timeIntervalSince1970 * 1000
-                    pendingRides.append(interrupted)
-                    try write(RideArchive(active: nil, pending: pendingRides, account: account))
+                    if interrupted.pause?.isPaused == true {
+                        // No tracking is expected during a pause, so it can safely
+                        // remain paused even after iOS terminates the process.
+                        ride = interrupted
+                    } else {
+                        interrupted.endedAt = Date().timeIntervalSince1970 * 1000
+                        pendingRides.append(interrupted)
+                        try write(RideArchive(active: nil, pending: pendingRides, account: account))
+                    }
                 }
             } else if FileManager.default.fileExists(atPath: legacy.path) {
                 var restored = try JSONDecoder().decode(Ride.self, from: Data(contentsOf: legacy))
@@ -83,7 +90,8 @@ enum RideActionError: LocalizedError {
                 pendingRides = [restored]
                 try? FileManager.default.removeItem(at: legacy)
             }
-            if !pendingRides.isEmpty { message = "Jízdy čekají na kontrolu." }
+            if ride?.pause?.isPaused == true { message = "Jízda je pozastavená. Pokračuj, až budeš připravený." }
+            else if !pendingRides.isEmpty { message = "Jízdy čekají na kontrolu." }
         } catch {
             storageFailed = true
             message = "Záznam se nepodařilo přečíst nebo uložit. Původní soubor zůstává v zařízení."
@@ -151,6 +159,7 @@ enum RideActionError: LocalizedError {
     private func begin(odometer: Double, userId: String, system: Bool) throws -> Bool {
         guard ride == nil else { return false }
         var started = Ride(); started.odometerStart = odometer; started.userId = userId
+        started.pause = RidePauseClock(trackingSinceMs: started.startedAt)
         try write(RideArchive(active: started, pending: pendingRides, account: account))
         do { try live.start(started, required: system) }
         catch {
@@ -191,8 +200,33 @@ enum RideActionError: LocalizedError {
             pendingStart = false; start(odometer: pendingOdometer, userId: pendingUserId)
         }
     }
+    func pause() {
+        guard var current = ride, current.endedAt == nil, current.pause?.isPaused != true, !storageFailed else { return }
+        var clock = current.pause ?? RidePauseClock(trackingSinceMs: current.startedAt)
+        clock.pause(at: Date().timeIntervalSince1970 * 1000); current.pause = clock
+        do {
+            try write(RideArchive(active: current, pending: pendingRides, account: account))
+            ride = current; manager.stopUpdatingLocation(); distance.reset()
+            speedKmh = nil; accuracyMetres = nil; lastLocationAtMs = nil
+            message = "Jízda pozastavena. GPS ani doba jízdy se nepřičítají."
+            live.update(current, message: message, force: true)
+        } catch { message = "Pauzu se nepodařilo uložit. Jízda dál probíhá; zkus pauzu znovu." }
+    }
+    func resume() {
+        guard var current = ride, var clock = current.pause, clock.isPaused, current.endedAt == nil, !storageFailed else { return }
+        guard [.authorizedAlways, .authorizedWhenInUse].contains(manager.authorizationStatus) else {
+            message = "Pro pokračování povol polohu aplikaci v Nastavení."; return
+        }
+        clock.resume(at: Date().timeIntervalSince1970 * 1000); current.pause = clock
+        do {
+            try write(RideArchive(active: current, pending: pendingRides, account: account))
+            ride = current; distance.reset(); speedKmh = nil; accuracyMetres = nil; lastLocationAtMs = nil
+            message = "Hledám přesnou GPS polohu…"; manager.startUpdatingLocation()
+            live.resume(current, message: message)
+        } catch { message = "Pokračování se nepodařilo uložit. Jízda zůstává pozastavená." }
+    }
     func retry() {
-        guard ride != nil, ride?.endedAt == nil, !storageFailed else { return }
+        guard ride != nil, ride?.endedAt == nil, ride?.pause?.isPaused != true, !storageFailed else { return }
         manager.stopUpdatingLocation(); distance.reset()
         accuracyMetres = nil; lastLocationAtMs = nil; speedKmh = nil
         manager.startUpdatingLocation(); message = "Hledám přesnou GPS polohu…"
@@ -201,7 +235,9 @@ enum RideActionError: LocalizedError {
         pendingStart = false
         guard var completed = ride else { return true }
         manager.stopUpdatingLocation(); distance.reset(); speedKmh = nil
-        completed.endedAt = Date().timeIntervalSince1970 * 1000
+        let endedAt = Date().timeIntervalSince1970 * 1000
+        completed.endedAt = endedAt
+        completed.pause?.resume(at: endedAt)
         var queued = pendingRides; queued.append(completed)
         do {
             try write(RideArchive(active: nil, pending: queued, account: account))
@@ -242,12 +278,13 @@ enum RideActionError: LocalizedError {
             } else { message = "GPS zatím nezískala použitelnou polohu." }
             return
         }
-        guard ride != nil, ride?.endedAt == nil, !storageFailed else { return }
+        guard ride != nil, ride?.endedAt == nil, ride?.pause?.isPaused != true, !storageFailed else { return }
         for point in locations.sorted(by: { $0.timestamp < $1.timestamp }) {
             // iOS may deliver a batch late. Keep its valid points from this ride;
             // reject pre-start cached fixes instead of dropping all fixes >30s old.
             guard let startedAt = ride?.startedAt,
-                  DistanceAccumulator.belongsToRide(point.timestamp, startedAtMs: startedAt) else { continue }
+                  DistanceAccumulator.belongsToRide(point.timestamp, startedAtMs: startedAt),
+                  ride?.pause?.accepts(point.timestamp) != false else { continue }
             guard point.horizontalAccuracy >= 0 else {
                 distance.reset(); speedKmh = nil; message = "GPS zatím nemá použitelnou polohu."; continue
             }
@@ -287,6 +324,7 @@ enum RideActionError: LocalizedError {
         }
     }
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        guard ride?.pause?.isPaused != true else { return }
         pendingProbe = false; distance.reset(); speedKmh = nil; message = "GPS: \(error.localizedDescription)"
     }
 }

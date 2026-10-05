@@ -4,6 +4,7 @@
   if (location.origin !== trustedOrigin || (location.pathname && !location.pathname.startsWith("/kniha-jizd/")) || window.top !== window || !window.webkit?.messageHandlers?.nativeRide) return;
   if (window.__nativeBridgeInstalled) return;
   window.__nativeBridgeInstalled = true;
+  window.__nativePauseSupported = true;
   const send = body => window.webkit.messageHandlers.nativeRide.postMessage(body);
   let latest = null;
   let pending = false;
@@ -65,7 +66,7 @@
     // approved account value so discards and out-of-order reviews cannot add gaps.
     const odometer = loadOdometer();
     state.draft = {nativeRideId: ride.id, startedAt: ride.startedAt, endedAt: ride.endedAt,
-      distanceKm: ride.distanceKm, route: ride.route, odometerStart: odometer, odometerEnd: odometer + ride.distanceKm};
+      distanceKm: ride.distanceKm, route: ride.route, pausedMilliseconds: ride.pause?.accumulatedMs || 0, odometerStart: odometer, odometerEnd: odometer + ride.distanceKm};
     localRemove('activeTrip'); prepareFinish();
     $('finalDistance').textContent = ride.distanceKm.toFixed(3);
     $('finalOdometer').textContent = formatOdometer(state.draft.odometerEnd);
@@ -112,6 +113,8 @@
       if (state.draft && !state.draft.nativeRideId) { renderQueue(); return; }
       // Native recorder owns the complete route, including points collected while JS sleeps.
       state.startedAt = ride.startedAt;
+      state.pausedAt = ride.pause?.pausedAtMs ?? null;
+      state.pausedMilliseconds = ride.pause?.accumulatedMs || 0;
       state.distanceKm = ride.distanceKm;
       state.route = ride.route;
       state.latestSpeedKmh = Number.isFinite(speedKmh) && speedKmh >= 0 ? speedKmh : 0;
@@ -123,7 +126,7 @@
       $('accuracyValue').textContent = Number.isFinite(accuracyMetres) && accuracyMetres >= 0 ? Math.round(accuracyMetres) : '—';
       const stale = Number.isFinite(lastLocationAtMs) && Date.now() - lastLocationAtMs > 30000;
       if (stale) state.latestSpeedKmh = 0;
-      $('gpsStatus').textContent = stale
+      $('gpsStatus').textContent = state.pausedAt != null ? (message || 'Jízda pozastavena. GPS ani doba jízdy se nepřičítají.') : stale
         ? 'Nová GPS poloha nepřišla déle než 30 s. Čekám na signál…'
         : message + (Number.isFinite(lastLocationAtMs) ? ' · poloha v ' + new Date(lastLocationAtMs).toLocaleTimeString('cs-CZ') : '');
       if (!state.timerId) timer();
@@ -149,7 +152,7 @@
       originalRenderLive();
       if (!state.startedAt || !latest?.ride || latest.ride.endedAt != null) return;
       const fresh = Number.isFinite(latest.lastLocationAtMs) && Date.now() - latest.lastLocationAtMs <= 30000;
-      const valid = fresh && Number.isFinite(latest.speedKmh) && latest.speedKmh >= 0;
+      const valid = state.pausedAt == null && fresh && Number.isFinite(latest.speedKmh) && latest.speedKmh >= 0;
       $('speedValue').textContent = valid ? Math.round(latest.speedKmh) : '—';
     };
     intercept('startTrip', () => {
@@ -157,12 +160,16 @@
       pending = true; $('idleStatus').textContent = 'Žádám o přístup k GPS…';
       send({action: 'start', odometerStart: loadOdometer(), userId: window.rideAccount.user.id});
     });
+    if ($('pauseTrip')) intercept('pauseTrip', () => {
+      if (!ready() || !latest?.ride || latest.ride.endedAt != null || !owns(latest.ride) || state.draft) return;
+      send({action: latest.ride.pause?.pausedAtMs != null ? 'resume' : 'pause'});
+    });
     intercept('stopTrip', () => {
       if (!state.startedAt || state.draft) return;
       send({action: 'stop'});
     });
     if ($('nativeAllowBackground')) intercept('nativeAllowBackground', () => send({action: 'requestAlways'}));
-    intercept('retryGps', () => send({action: 'retry'}));
+    intercept('retryGps', () => { if (latest?.ride?.pause?.pausedAtMs == null) send({action: 'retry'}); });
     intercept('testGps', () => {
       $('gpsTestResult').classList.remove('hidden');
       $('gpsTestResult').textContent = 'Hledám GPS polohu…';

@@ -43,6 +43,8 @@ struct LogWebView: UIViewRepresentable {
             case "start":
                 if let value = body["odometerStart"] as? Double, value.isFinite, value >= 0 { recorder.start(odometer: value, userId: body["userId"] as? String) }
             case "stop": recorder.stop()
+            case "pause": recorder.pause()
+            case "resume": recorder.resume()
             case "retry": recorder.retry()
             case "test": recorder.testGps()
             case "saved": if let id = body["id"] as? String, let userId = body["userId"] as? String { recorder.acknowledge(id, userId: userId) }

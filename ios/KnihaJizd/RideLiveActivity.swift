@@ -22,10 +22,14 @@ import Foundation
             if required { throw RideActionError.unavailable("Živou aktivitu se nepodařilo spustit. Otevři aplikaci a zkus to znovu.") }
         }
     }
-    func update(_ ride: Ride, message: String) {
-        guard #available(iOS 16.2, *), let activity, Date().timeIntervalSince(lastUpdate) >= 5 else { return }
+    func resume(_ ride: Ride, message: String) {
+        if activity == nil { try? start(ride, required: false) }
+        update(ride, message: message, force: true)
+    }
+    func update(_ ride: Ride, message: String, force: Bool = false) {
+        guard #available(iOS 16.2, *), let activity, (force || Date().timeIntervalSince(lastUpdate) >= 5) else { return }
         lastUpdate = Date()
-        let content = ActivityContent(state: RideActivityAttributes.ContentState(distanceKm: ride.distanceKm, message: message, ended: false), staleDate: Date().addingTimeInterval(60))
+        let content = ActivityContent(state: RideActivityAttributes.ContentState(distanceKm: ride.distanceKm, message: message, ended: false, pausedAt: ride.pause?.pausedAtMs.map { Date(timeIntervalSince1970: $0 / 1000) }, pausedMilliseconds: ride.pause?.accumulatedMs), staleDate: ride.pause?.isPaused == true ? nil : Date().addingTimeInterval(60))
         Task { await activity.update(content) }
     }
     func finish(_ ride: Ride) {

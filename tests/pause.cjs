@@ -1,0 +1,22 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
+const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+const script=html.match(/<script>\s*const \$[\s\S]*?<\/script>/)[0].replace(/^<script>|<\/script>$/g,'');
+const section=(start,end)=>script.slice(script.indexOf(start),script.indexOf(end,script.indexOf(start)));
+let now=100000,watch=0,cleared=0;const elements={},events={},cache={};
+class Clock extends Date {static now(){return now}}
+const $=id=>elements[id]??={value:'',textContent:'',classList:{add(){},remove(){}},addEventListener(type,fn){events[id+':'+type]=fn}};
+const context={$,Date:Clock,window:{},state:{startedAt:100000,pausedAt:null,pausedMilliseconds:0,trackingSince:100000,distanceKm:0,latestSpeedKmh:0,route:[],routeBreak:true,watchId:1,lastPoint:null},localSet:(k,v)=>cache[k]=v,navigator:{geolocation:{clearWatch(){cleared++},watchPosition(){return ++watch}}},gpsBlockReason:()=>null,appendRoutePoint:(route,p,boundary)=>route.push([p.lat,p.lon,boundary?1:0]),positionError(){}};
+vm.createContext(context);vm.runInContext(section('function haversine(','function gpsContext()'),context);
+vm.runInContext(section('function watchGps()', "$('saveOdometer').addEventListener"),context);
+const fix=(lat,t=now)=>context.positionUpdate({timestamp:t,coords:{latitude:lat,longitude:14,accuracy:5,speed:10}});
+fix(50);now=110000;fix(50.001);const measured=context.state.distanceKm;
+events['pauseTrip:click']();assert.equal(context.state.pausedAt,110000);assert.equal(cleared,1);assert.equal(context.state.watchId,null);assert.equal($('pauseTrip').textContent,'Pokračovat');assert.equal($('retryGps').disabled,true);
+now=120000;fix(50.01);context.renderLive();assert.equal(context.state.distanceKm,measured);assert.equal($('durationValue').textContent,'00:10');assert.equal(JSON.parse(cache.activeTrip).pausedAt,110000);
+now=130000;events['pauseTrip:click']();assert.equal(context.state.pausedMilliseconds,20000);assert.equal(context.state.pausedAt,null);assert.equal(watch,1);assert.equal($('pauseTrip').textContent,'Pauza');
+fix(50.01,120000);assert.equal(context.state.lastPoint,null);fix(50.01);assert.equal(context.state.distanceKm,measured);assert.equal(context.state.route.at(-1)[2],1);
+now=140000;fix(50.011);assert(context.state.distanceKm>measured);assert.equal($('durationValue').textContent,'00:20');
+events['pauseTrip:click']();now=145000;events['pauseTrip:click']();assert.equal(context.state.pausedMilliseconds,25000);
+let prepared=false;context.prepareFinish=()=>prepared=true;context.loadOdometer=()=>50000;context.formatOdometer=String;context.clearInterval=()=>{};
+vm.runInContext(section("$('stopTrip').addEventListener",'let saveTripBusy='),context);
+now=150000;events['pauseTrip:click']();now=160000;events['stopTrip:click']();assert(prepared);assert.equal(context.state.draft.pausedMilliseconds,35000);assert.equal(context.state.draft.distanceKm,context.state.distanceKm);
+console.log('Passed: pause freezes GPS/duration, resume keeps distance, rejects cached fixes, route splits, repeated pauses and stop while paused');

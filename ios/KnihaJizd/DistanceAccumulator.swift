@@ -41,3 +41,27 @@ struct DistanceAccumulator {
         return Sample(metres: metres, appendPoint: true, startsSegment: false)
     }
 }
+
+// Persisted independently of GPS samples; optional on old ride archives.
+struct RidePauseClock: Codable {
+    var trackingSinceMs: Double
+    var pausedAtMs: Double?
+    var accumulatedMs = 0.0
+    var isPaused: Bool { pausedAtMs != nil }
+    mutating func pause(at milliseconds: Double) {
+        guard pausedAtMs == nil else { return }
+        pausedAtMs = milliseconds
+    }
+    mutating func resume(at milliseconds: Double) {
+        guard let pausedAtMs else { return }
+        accumulatedMs += max(0, milliseconds - pausedAtMs)
+        self.pausedAtMs = nil
+        trackingSinceMs = milliseconds
+    }
+    func elapsed(startedAtMs: Double, nowMs: Double) -> Double {
+        max(0, (pausedAtMs ?? nowMs) - startedAtMs - accumulatedMs)
+    }
+    func accepts(_ timestamp: Date, now: Date = Date()) -> Bool {
+        !isPaused && DistanceAccumulator.belongsToRide(timestamp, startedAtMs: trackingSinceMs, now: now)
+    }
+}

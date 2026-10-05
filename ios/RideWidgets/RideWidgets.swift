@@ -22,7 +22,7 @@ struct RideLiveWidget: Widget {
                 HStack {
                     Label("Kniha jízd", systemImage: "car.fill").foregroundStyle(lime)
                     Spacer()
-                    Text(context.state.ended ? "Ukončeno" : "Jízda probíhá").font(.caption)
+                    Text(context.state.ended ? "Ukončeno" : (context.state.pausedAt != nil ? "Pozastaveno" : "Jízda probíhá")).font(.caption)
                 }
                 HStack(alignment: .firstTextBaseline) {
                     Text(context.state.distanceKm, format: .number.precision(.fractionLength(3)))
@@ -30,8 +30,14 @@ struct RideLiveWidget: Widget {
                     Text("km")
                     Spacer()
                     if !context.state.ended {
-                        Text(timerInterval: context.attributes.startedAt...Date.distantFuture, countsDown: false)
-                            .monospacedDigit().frame(width: 85)
+                        if let pausedAt = context.state.pausedAt {
+                            let seconds = Int(max(0, pausedAt.timeIntervalSince(context.attributes.startedAt) - (context.state.pausedMilliseconds ?? 0) / 1000))
+                            Text(String(format: "%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60))
+                                .monospacedDigit().frame(width: 85)
+                        } else {
+                            Text(timerInterval: context.attributes.startedAt.addingTimeInterval((context.state.pausedMilliseconds ?? 0) / 1000)...Date.distantFuture, countsDown: false)
+                                .monospacedDigit().frame(width: 85)
+                        }
                     }
                 }
                 if context.isStale && !context.state.ended {

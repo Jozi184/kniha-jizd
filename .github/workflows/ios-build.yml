@@ -21,6 +21,7 @@ jobs:
           node ios/Tests/native-bridge.cjs
           node tests/accounts.cjs
           node tests/trip-report.cjs
+          node tests/pause.cjs
       - name: GPS distance regression checks
         run: |
           swiftc ios/KnihaJizd/DistanceAccumulator.swift ios/Tests/main.swift -o "$RUNNER_TEMP/distance-tests"
