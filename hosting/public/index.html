@@ -226,6 +226,7 @@ async function requestLog(method,body){
 }
 async function persistLog(odometerKm,trips){
   if(!storageReady) return false;
+  trips=sortTripsByDate(trips);
   savingControls(true);
   $('storageStatus').textContent='Ukládám…';
   try{
@@ -245,7 +246,7 @@ async function initializeLog(){
   savingControls(true);
   try{
     const data=await requestLog('GET');
-    log={odometerKm:data.odometerKm,trips:data.trips,revision:data.revision};
+    log={odometerKm:data.odometerKm,trips:sortTripsByDate(data.trips),revision:data.revision};
     // Bring existing device records across only when this account has no saved log.
     const previousOdometer=localGet('odometerKm');
     let previousTrips=[];try{previousTrips=JSON.parse(localGet('trips')||'[]')}catch{}
@@ -532,11 +533,22 @@ function escapeHtml(s){
   return s.replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m]));
 }
 
+function sortTripsByDate(trips){
+  const timestamp=trip=>{
+    const value=new Date(trip.startedAt).getTime();
+    return Number.isFinite(value)?value:-Infinity;
+  };
+  return trips.slice().sort((a,b)=>{
+    const first=timestamp(a),second=timestamp(b);
+    return first===second?0:first>second?-1:1;
+  });
+}
+
 $('exportCsv').addEventListener('click',()=>{
   const trips=getTrips();
   if(!trips.length) return alert('Není co exportovat.');
   const rows=[['Datum','Start','Konec','Km','Tachometr start','Tachometr konec','Typ','Odkud','Kam','Poznámka']];
-  for(const t of trips){
+  for(const t of sortTripsByDate(trips)){
     const s=new Date(t.startedAt), e=new Date(t.endedAt);
     rows.push([
       s.toLocaleDateString('cs-CZ'),
