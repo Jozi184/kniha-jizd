@@ -26,8 +26,14 @@ function setup(){
  t=setup();t.$('carOdometerEnd').value='50018,2';t.setOk(false);await t.save();assert.equal(t.context.state.draft.carOdometerEnd,50018.2);assert.equal(t.$('carOdometerEnd').value,'50018,2');t.setOk(true);await t.save();assert.equal(t.context.state.draft,null);
  t=setup();t.$('tripType').value='Soukromá';t.context.updateCarOdometerHint();assert.equal(t.$('carOdometerEnd').required,false);await t.save();assert.equal(t.saved().trips[0].carOdometerEnd,undefined);
  const trip={startedAt:100000,endedAt:200000,distanceKm:18,odometerStart:50000,odometerEnd:50018,type:'Služební',note:'',carOdometerEnd:50018.2,gpsDistanceKm:17.35};
- const rows=t.context.tripCsvRows([trip,{...trip,carOdometerEnd:undefined,gpsDistanceKm:undefined}]);assert.equal(rows[0].length,12);assert.equal(rows[1][10],'50018.200');assert.equal(rows[1][11],'17.350');assert.equal(rows[2][10],'');assert.equal(rows[2][11],'');
+ const rows=t.context.tripCsvRows([trip,{...trip,carOdometerEnd:undefined,gpsDistanceKm:undefined}]);assert.equal(rows[0].length,12);assert.equal(rows[1][10],'50018,200');assert.equal(rows[1][11],'17,350');assert.equal(rows[2][10],'');assert.equal(rows[2][11],'');
+ const numericRows=t.context.tripCsvRows([{...trip,distanceKm:18.125},{...trip,distanceKm:0.875,carOdometerEnd:0,gpsDistanceKm:0}]);
+ for(const row of numericRows.slice(1))for(const column of [3,4,5,10,11])assert.match(row[column],/^\d+,\d+$/,'Czech decimal without thousands separators');
+ assert.equal(numericRows.slice(1).reduce((sum,row)=>sum+Number(row[3].replace(',','.')),0),19);
+ assert.equal(numericRows[1][4],'50000,0');assert.equal(numericRows[2][10],'0,000');
+ assert.equal(trip.distanceKm,18,'Export must not modify stored numbers');
  t.context.getTrips=()=>[trip];t.context.renderTrips();assert.match(t.$('tripList').innerHTML,/Tachometr v autě na konci: 50018.2 km/);assert.match(t.$('tripList').innerHTML,/Naměřeno GPS:/);
  t.context.getTrips=()=>[{...trip,carOdometerEnd:undefined,gpsDistanceKm:undefined}];t.context.renderTrips();assert(!t.$('tripList').innerHTML.includes('Tachometr v autě na konci:'));
  console.log('Passed: required business reading, optional private reading, Czech decimals, invalid values, zero reading, failed-save retry, GPS preservation, legacy history and CSV');
 })().catch(e=>{console.error(e);process.exit(1)});
+

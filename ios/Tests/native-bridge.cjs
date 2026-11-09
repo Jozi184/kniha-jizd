@@ -20,9 +20,9 @@ function setup(origin='https://jozi184.github.io') {
  let before=t.messages.length;await t.context.persistLog(102,[t.context.state.draft]);assert.equal(t.messages.length,before);t.setOk(true);await t.context.persistLog(102,[t.context.state.draft]);assert.equal(t.messages.at(-1).action,'saved');
  t=setup();t.context.window.__receiveNativeRide({ride:{...ride,endedAt:2000},message:'Ended'});t.click('confirmDiscard');assert.equal(t.messages.at(-1).action,'discard');assert.equal(t.context.state.draft,null);
  t=setup();t.context.log.trips=[{nativeRideId:ride.id}];t.context.window.__receiveNativeRide({ride:{...ride,endedAt:2000},message:'Ended'});assert.equal(t.context.state.draft,null);assert.equal(t.messages.at(-1).action,'saved');
- t.context.log.trips=[{startedAt:1000,endedAt:2000,distanceKm:1.234,odometerStart:100,odometerEnd:101.234,type:'Služební',carOdometerEnd:101.3,gpsDistanceKm:1.234,note:'quoted "text"'}];t.click('exportCsv');assert.equal(t.messages.at(-1).action,'export');assert.ok(t.messages.at(-1).csv.startsWith('\ufeff'));assert.ok(t.messages.at(-1).csv.includes('"1.234"'));assert.ok(t.messages.at(-1).csv.includes('"quoted ""text"""'));
- assert.ok(t.messages.at(-1).csv.includes('"101.300"'));
- t.context.tripCsvRows=()=>[['shared export'],['101.300','1.234']];t.click('exportCsv');assert.ok(t.messages.at(-1).csv.includes('shared export'));
+ t.context.log.trips=[{startedAt:1000,endedAt:2000,distanceKm:1.234,odometerStart:100,odometerEnd:101.234,type:'Služební',carOdometerEnd:101.3,gpsDistanceKm:1.234,note:'quoted "text"'}];t.click('exportCsv');assert.equal(t.messages.at(-1).action,'export');assert.ok(t.messages.at(-1).csv.startsWith('\ufeff'));assert.ok(t.messages.at(-1).csv.includes('"1,234"'));assert.ok(t.messages.at(-1).csv.includes('"quoted ""text"""'));
+ assert.ok(t.messages.at(-1).csv.includes('"101,300"'));
+ t.context.tripCsvRows=()=>[['shared export'],['101,300','1,234']];t.click('exportCsv');assert.ok(t.messages.at(-1).csv.includes('shared export'));
  t=setup();t.context.window.__receiveNativeRide({ride:{...ride,pause:{trackingSinceMs:1000,pausedAtMs:1500,accumulatedMs:200}},message:'Jízda pozastavena',speedKmh:35,lastLocationAtMs:Date.now()});
  assert.equal(t.context.state.pausedAt,1500);assert.equal(t.context.state.pausedMilliseconds,200);assert.equal(t.context.$('speedValue').textContent,'—');assert.match(t.context.$('gpsStatus').textContent,/pozastavena/);
  t.click('pauseTrip');assert.equal(t.messages.at(-1).action,'resume');let pausedMessages=t.messages.length;t.click('retryGps');assert.equal(t.messages.length,pausedMessages);
@@ -58,3 +58,4 @@ function setup(origin='https://jozi184.github.io') {
  t.click('nativeAllowBackground');assert.equal(t.messages.at(-1).action,'requestAlways');t.context.window.__clearNativeAccount();assert.equal(t.messages.at(-1).action,'clearContext');
  console.log('Passed: queue of multiple rides, review without deletion, account isolation, approval rebasing, queue during recording, lockscreen setup, logout,  speed/accuracy freshness and validity, native start/stop, background snapshot, corrections, failed save retention, save ack, confirmed discard, duplicate recovery, CSV, origin guard');
 })().catch(e=>{console.error(e);process.exit(1)});
+
