@@ -212,9 +212,9 @@
       for (const trip of trips) {
         const start = new Date(trip.startedAt), end = new Date(trip.endedAt);
         rows.push([start.toLocaleDateString('cs-CZ'), start.toLocaleTimeString('cs-CZ'), end.toLocaleTimeString('cs-CZ'),
-          Number(trip.distanceKm).toFixed(3), Number(trip.odometerStart).toFixed(1), Number(trip.odometerEnd).toFixed(1),
-          trip.type, trip.from || '', trip.to || '', trip.note || '', Number.isFinite(trip.carOdometerEnd) ? trip.carOdometerEnd.toFixed(3) : '',
-          Number.isFinite(trip.gpsDistanceKm) ? trip.gpsDistanceKm.toFixed(3) : '']);
+          Number(trip.distanceKm).toFixed(3).replace('.', ','), Number(trip.odometerStart).toFixed(1).replace('.', ','), Number(trip.odometerEnd).toFixed(1).replace('.', ','),
+          trip.type, trip.from || '', trip.to || '', trip.note || '', Number.isFinite(trip.carOdometerEnd) ? trip.carOdometerEnd.toFixed(3).replace('.', ',') : '',
+          Number.isFinite(trip.gpsDistanceKm) ? trip.gpsDistanceKm.toFixed(3).replace('.', ',') : '']);
       }
       const exportRows = typeof tripCsvRows === 'function' ? tripCsvRows(trips) : rows;
       const csv = '\ufeff' + exportRows.map(row => row.map(value => '"' + String(value).replaceAll('"','""') + '"').join(';')).join('\n');
@@ -228,3 +228,4 @@
   }
   install();
 })();
+

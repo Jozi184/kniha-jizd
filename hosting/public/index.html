@@ -554,9 +554,9 @@ $('exportCsv').addEventListener('click',()=>{
       s.toLocaleDateString('cs-CZ'),
       s.toLocaleTimeString('cs-CZ'),
       e.toLocaleTimeString('cs-CZ'),
-      Number(t.distanceKm).toFixed(3),
-      Number(t.odometerStart).toFixed(1),
-      Number(t.odometerEnd).toFixed(1),
+      Number(t.distanceKm).toFixed(3).replace('.', ','),
+      Number(t.odometerStart).toFixed(1).replace('.', ','),
+      Number(t.odometerEnd).toFixed(1).replace('.', ','),
       t.type,
       t.from||'', t.to||'',
       t.note||''
@@ -619,3 +619,4 @@ initializeLog();
 <script src="odometer-photo.js"></script>
 </body>
 </html>
+
